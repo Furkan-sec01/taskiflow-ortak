@@ -1,0 +1,178 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Organization {
+  id            String                @id @default(uuid())
+  name          String
+  ownerId       String
+  members       User_Organization[]
+  projects      Project[]
+  notifications Notification[]
+  createdAt     DateTime              @default(now())
+}
+
+model User {
+  id                String                @id @default(uuid())
+  email             String                @unique
+  name              String?
+  password          String?
+  status            String                @default("active")
+  verificationToken String?               @unique
+
+  username          String?               @unique
+  phone             String?
+  bio               String?
+  department        String?
+  profileRole       String?
+  notificationEnabled Boolean @default(true)
+  location          String?
+
+  organizations     User_Organization[]
+  ownedProjects     Project[]             @relation("ProjectOwner")
+  memberProjects    User_Project[]
+  ownedTasks        Task[]                @relation("TaskOwner")
+  assignedTasks     Task[]                @relation("TaskAssignee")
+  notifications     Notification[]
+
+  subscriptions     Subscription[]
+  payments          Payment[]
+  billingProfile    BillingProfile?
+
+  createdAt         DateTime              @default(now())
+}
+
+model User_Organization {
+  userId         String
+  organizationId String
+  role           String       @default("MEMBER") // OWNER - MEMBER
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  joinedAt       DateTime     @default(now())
+
+  @@id([userId, organizationId])
+}
+
+model Project {
+  id            String          @id @default(uuid())
+  title         String
+  description   String?
+  orgId         String
+  organization  Organization    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  ownerId       String
+  owner         User            @relation("ProjectOwner", fields: [ownerId], references: [id])
+  members       User_Project[]
+  tasks         Task[]
+  columns       Column[]
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+}
+
+model User_Project {
+  userId    String
+  projectId String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@id([userId, projectId])
+}
+
+model Column {
+  id        String    @id @default(uuid())
+  title     String
+  order     Int
+  projectId String
+  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tasks     Task[]
+}
+
+model Task {
+  id            String     @id @default(uuid())
+  title         String
+  description   String?
+  priority      String     @default("MEDIUM")
+  dueDate       DateTime?
+  order         Int        @default(0)
+  columnId      String
+  column        Column     @relation(fields: [columnId], references: [id], onDelete: Cascade)
+  projectId     String
+  project       Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  ownerId       String?
+  owner         User?      @relation("TaskOwner", fields: [ownerId], references: [id])
+  assigneeId    String?
+  assignee      User?      @relation("TaskAssignee", fields: [assigneeId], references: [id])
+  totalTime     Int        @default(0)
+  isTracking    Boolean    @default(false)
+  lastStartedAt DateTime?
+  isCompleted   Boolean    @default(false)
+  createdAt     DateTime   @default(now())
+  completedAt   DateTime?
+  updatedAt     DateTime   @updatedAt
+}
+
+model Notification {
+  id             String         @id @default(uuid())
+  title          String
+  message        String
+  type           String
+  isRead         Boolean        @default(false)
+  userId         String
+  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organizationId String?
+  organization   Organization?  @relation(fields: [organizationId], references: [id])
+  createdAt      DateTime       @default(now())
+}
+
+model Subscription {
+  id        String   @id @default(uuid())
+  userId    String
+  plan      String   @default("FREE") // FREE - PRO - BUSINESS
+  status    String   @default("ACTIVE") // ACTIVE - CANCELED - EXPIRED
+  startDate DateTime @default(now())
+  endDate   DateTime?
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Payment {
+  id          String   @id @default(uuid())
+  userId      String
+  amount      Float
+  plan        String?
+  currency    String   @default("TRY")
+  status      String   @default("PENDING") // PENDING - PAID - FAILED - REFUNDED
+  provider    String?  // iyzico, stripe, manual
+  iyzicoPaymentId String?   // 🔥 YENİ
+  conversationId  String?   // 🔥 YENİ
+  description String?
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model BillingProfile {
+  id          String   @id @default(uuid())
+  userId      String   @unique
+  fullName    String?
+  companyName String?
+  taxNumber   String?
+  taxOffice   String?
+  address     String?
+  city        String?
+  country     String?  @default("Türkiye")
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
