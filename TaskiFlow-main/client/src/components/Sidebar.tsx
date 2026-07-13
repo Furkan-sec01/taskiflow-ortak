@@ -196,13 +196,38 @@ export default function Sidebar() {
   const toggle = (key: string) => setCollapsed(p => ({ ...p, [key]: !p[key] }));
   const groups = mode === "main" ? workspaceGroups : settingsGroups;
 
-  const handleAddTeam = () => {
+  const handleAddTeam = async () => {
     const trimmed = newTeamName.trim();
     if (!trimmed) return;
-    setTeams(prev => [...prev, { id: Date.now().toString(), name: trimmed }]);
+
+    const token = localStorage.getItem("token");
+
+    try {
+      const res = await fetch("http://localhost:5000/api/organizations/create", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify({ name: trimmed })
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        const realOrgId = data.organization?.id;
+        setTeams(prev => [...prev, { id: realOrgId, name: trimmed }]);
+        window.dispatchEvent(new CustomEvent("teams-updated"));
+      } else {
+        alert(data.error || "Ekip oluşturulamadı.");
+      }
+    } catch (error) {
+      alert("Sunucu bağlantı hatası.");
+    }
+
     setNewTeamName("");
     setAddingTeam(false);
-  };
+};
 
   const handleDeleteTeam = (e: React.MouseEvent, id: string) => {
     e.preventDefault();

@@ -85,18 +85,16 @@ const NotificationDropdown = () => {
 
       const data = await res.json();
 
-      if (res.ok) {
-        setNotifications(prev => prev.filter(n => n.id !== notificationId));
+     if (res.ok) {
+  setNotifications(prev => prev.filter(n => n.id !== notificationId));
 
-        if (action === "ACCEPT" && data.token) {
-          localStorage.setItem("token", data.token);
-          window.location.reload(); 
-        } else {
-          alert(data.message || "İşlem tamamlandı.");
-        }
-      } else {
-        alert(data.error || "İşlem başarısız.");
-      }
+  if (action === "ACCEPT") {
+    alert(data.message || "Başarıyla ekibe katıldınız!");
+    window.location.reload();
+  } else {
+    alert(data.message || "İşlem tamamlandı.");
+  }
+}
     } catch (error) {
       console.error("İşlem hatası:", error);
       alert("Sunucuya bağlanılamadı.");

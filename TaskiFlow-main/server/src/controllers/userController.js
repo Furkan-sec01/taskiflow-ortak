@@ -67,13 +67,6 @@ exports.getMe = async (req, res) => {
     });
 
     const completedTaskCount = await prisma.task.count({
-      const teamMemberCount = await prisma.user_Organization.count({
-  where: {
-    organization: {
-      ownerId: userId,
-    },
-  },
-});
       where: {
         isCompleted: true,
         OR: [
@@ -98,7 +91,6 @@ exports.getMe = async (req, res) => {
         projectCount,
         taskCount,
         completedTaskCount,
-        teamMemberCount,
       },
     });
 
@@ -361,4 +353,5 @@ exports.changePassword = async (req, res) => {
       .status(500)
       .json({ error: "Sunucu hatası. Lütfen daha sonra tekrar deneyin." });
   }
+
 };

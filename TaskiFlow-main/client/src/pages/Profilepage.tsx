@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Pencil, Upload, User, Mail, Clock } from "lucide-react";
 
 interface ProfileData {
@@ -21,6 +21,9 @@ export default function ProfilePage() {
   location: "",
 });
   const [draft, setDraft] = useState<ProfileData>(profile);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
+
   useEffect(() => {
   const storedUser = localStorage.getItem("user");
 
@@ -45,9 +48,52 @@ export default function ProfilePage() {
     setDraft((prev) => ({ ...prev, [key]: value }));
   };
 
-  const handleSave = () => {
-    setProfile(draft);
-    setEditing(false);
+  const handleSave = async () => {
+    setSaving(true);
+    setSaveError("");
+
+    const token = localStorage.getItem("token");
+
+    try {
+      const res = await fetch("http://localhost:5000/api/users/profile", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          name: draft.fullName,
+          email: draft.email,
+          username: draft.username,
+          phone: draft.phone,
+          bio: draft.bio,
+          location: draft.location,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || "Profil güncellenemedi.");
+      }
+
+      const storedUser = localStorage.getItem("user");
+      const currentUser = storedUser ? JSON.parse(storedUser) : {};
+      const updatedUser = {
+        ...currentUser,
+        ...data.user,
+        fullName: data.user.name,
+      };
+      localStorage.setItem("user", JSON.stringify(updatedUser));
+
+      setProfile(draft);
+      setEditing(false);
+    } catch (err) {
+      console.error(err);
+      setSaveError(err instanceof Error ? err.message : "Bir hata oluştu.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleCancel = () => {
@@ -174,19 +220,27 @@ export default function ProfilePage() {
 
       {/* Save Bar */}
       {editing && (
-        <div className="flex justify-end gap-2.5">
-          <button
-            onClick={handleCancel}
-            className="px-4 py-2 rounded-lg border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 transition-colors dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-800"
-          >
-            İptal
-          </button>
-          <button
-            onClick={handleSave}
-            className="px-5 py-2 rounded-lg bg-[#4F6EF7] text-white text-sm font-medium hover:bg-[#3d5ce0] transition-colors"
-          >
-            Kaydet
-          </button>
+        <div>
+          {saveError && (
+            <p className="text-sm text-red-600 dark:text-red-400 mb-2 text-right">
+              {saveError}
+            </p>
+          )}
+          <div className="flex justify-end gap-2.5">
+            <button
+              onClick={handleCancel}
+              className="px-4 py-2 rounded-lg border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 transition-colors dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-800"
+            >
+              İptal
+            </button>
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="px-5 py-2 rounded-lg bg-[#4F6EF7] text-white text-sm font-medium hover:bg-[#3d5ce0] transition-colors disabled:opacity-60"
+            >
+             {saving ? "Kaydediliyor..." : "Kaydet"}
+            </button>
+          </div>
         </div>
       )}
     </div>
