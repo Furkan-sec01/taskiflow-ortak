@@ -153,13 +153,26 @@ export default function Sidebar() {
   const [teamsCollapsed, setTeamsCollapsed] = useState(false);
 
   useEffect(() => {
+  const loadUser = () => {
     const storedUser = localStorage.getItem("user");
-    if (storedUser) {
-      try { setUser(JSON.parse(storedUser)); }
-      catch (error) { console.error("Kullanıcı verisi ayrıştırılamadı:", error); }
-    }
-  }, []);
 
+    if (!storedUser) return;
+
+    try {
+      setUser(JSON.parse(storedUser));
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  loadUser();
+
+  window.addEventListener("storage", loadUser);
+
+  return () => {
+    window.removeEventListener("storage", loadUser);
+  };
+}, []);
   useEffect(() => {
     const fetchTeams = async () => {
       const token = localStorage.getItem("token");
@@ -188,10 +201,12 @@ export default function Sidebar() {
   };
 
   const handleLogout = () => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("activeOrgId");
-    navigate("/login");
-  };
+  localStorage.removeItem("token");
+  localStorage.removeItem("user");
+  localStorage.removeItem("activeOrgId");
+
+  navigate("/login");
+};
 
   const toggle = (key: string) => setCollapsed(p => ({ ...p, [key]: !p[key] }));
   const groups = mode === "main" ? workspaceGroups : settingsGroups;

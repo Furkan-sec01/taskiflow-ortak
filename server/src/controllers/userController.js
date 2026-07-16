@@ -25,6 +25,15 @@ exports.getMe = async (req, res) => {
         location: true,
         status: true,
         createdAt: true,
+        subscriptions: {
+  where: {
+    status: "ACTIVE",
+  },
+  select: {
+    plan: true,
+    status: true,
+  },
+},
         organizations: {
           select: {
             role: true,
@@ -36,6 +45,19 @@ exports.getMe = async (req, res) => {
             },
           },
         },
+notifications: {
+  orderBy: {
+    createdAt: "desc",
+  },
+  take: 5,
+  select: {
+    id: true,
+    title: true,
+    message: true,
+    createdAt: true,
+  },
+},
+
       },
     });
 
@@ -75,24 +97,46 @@ exports.getMe = async (req, res) => {
         ],
       },
     });
+    const notifications = await prisma.notification.findMany({
+  where: {
+    userId: userId,
+  },
+  orderBy: {
+    createdAt: "desc",
+  },
+  take: 5,
+});
 
-    const formattedUser = {
-      ...user,
-      myOrganizations: (user.organizations || []).map((item) => ({
-        id: item.organization.id,
-        name: item.organization.name,
-        role: item.role,
-      })),
-    };
+  const formattedUser = {
+  ...user,
 
-    return res.json({
-      ...formattedUser,
-      stats: {
-        projectCount,
-        taskCount,
-        completedTaskCount,
-      },
-    });
+  role:
+    user.organizations?.[0]?.role ||
+    user.profileRole ||
+    "Üye",
+
+  plan:
+    user.subscriptions?.[0]?.plan || "FREE",
+
+  subscriptionStatus:
+    user.subscriptions?.[0]?.status || "ACTIVE",
+
+  myOrganizations: (user.organizations || []).map((item) => ({
+    id: item.organization.id,
+    name: item.organization.name,
+    role: item.role,
+  })),
+};
+console.log(formattedUser);
+   return res.json({
+  ...formattedUser,
+  stats: {
+    projectCount,
+    taskCount,
+    completedTaskCount,
+  },
+  notifications,
+});
 
   } catch (error) {
     console.error("GetMe Hatası:", error);
@@ -304,15 +348,7 @@ exports.changePassword = async (req, res) => {
       return res.status(400).json({ error: "Yeni şifreler eşleşmiyor." });
     }
 
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: {
-        id: true,
-        email: true,
-        password: true,
-      },
-    });
-
+  
     if (!user) {
       return res.status(404).json({ error: "Kullanıcı bulunamadı." });
     }

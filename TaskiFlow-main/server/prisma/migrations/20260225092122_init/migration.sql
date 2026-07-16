@@ -1,4 +1,0 @@
--- AlterTable
-ALTER TABLE "Task" ADD COLUMN     "isTracking" BOOLEAN NOT NULL DEFAULT false,
-ADD COLUMN     "lastStartedAt" TIMESTAMP(3),
-ADD COLUMN     "totalTime" INTEGER NOT NULL DEFAULT 0;
