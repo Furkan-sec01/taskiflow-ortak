@@ -44,6 +44,12 @@ exports.createProject = async (req, res) => {
         });
     }
 
+    if (!organizationId) {
+        return res.status(400).json({
+            error: "Proje bir ekibe/organizasyona bağlı olmalıdır. Lütfen bir ekip seçin."
+        });
+    }
+
     try {
         const subscription = await prisma.subscription.findFirst({
             where: {
@@ -75,7 +81,7 @@ exports.createProject = async (req, res) => {
                 data: {
                     title: title,
                     description: description,
-                    orgId: organizationId || null,
+                    orgId: organizationId ,
                     ownerId: userId
                 }
             });
@@ -226,8 +232,39 @@ exports.getProjectBoard = async (req, res) => {
 exports.updateTaskPosition = async (req, res) => {
     const { taskId } = req.params;
     const { columnId } = req.body;
+    const userId = req.user.id || req.user.userId;
 
     try {
+        const task = await prisma.task.findUnique({
+            where: { id: taskId },
+            include: { project: true }
+        });
+
+        if (!task) {
+            return res.status(404).json({ error: "Görev bulunamadı." });
+        }
+
+        // 🔒 Kullanıcı bu projenin sahibi mi ya da üyesi mi kontrol et
+        const isOwner = task.project.ownerId === userId;
+        const membership = await prisma.user_Project.findUnique({
+            where: {
+                userId_projectId: {
+                    userId: userId,
+                    projectId: task.projectId
+                }
+            }
+        });
+
+        if (!isOwner && !membership) {
+            return res.status(403).json({ error: "Bu görevi taşıma yetkiniz yok." });
+        }
+
+        // 🔒 Hedef sütunun aynı projeye ait olduğunu doğrula (başka projeye kaçırılmasın)
+        const targetColumn = await prisma.column.findUnique({ where: { id: columnId } });
+        if (!targetColumn || targetColumn.projectId !== task.projectId) {
+            return res.status(400).json({ error: "Geçersiz sütun." });
+        }
+
         const updatedTask = await prisma.task.update({
             where: { id: taskId },
             data: {
