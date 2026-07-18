@@ -202,20 +202,33 @@ exports.getProjectBoard = async (req, res) => {
             return res.status(403).json({ error: "Bu projenin panosuna erişim yetkiniz yok." });
         }
 
-        const projectBoard = await prisma.project.findUnique({
-            where: { id: projectId },
+      const projectBoard = await prisma.project.findUnique({
+    where: { id: projectId },
+    select: {
+        id: true,
+        title: true,
+        backgroundIndex: true,
+
+        columns: {
+            orderBy: { order: "asc" },
             include: {
-                columns: {
+                tasks: {
                     orderBy: { order: "asc" },
                     include: {
-                        tasks: {
-                            orderBy: { order: "asc" },
-                            include: { assignee: { select: { name: true, email: true } } }
+                        assignee: {
+                            select: {
+                                name: true,
+                                email: true
+                            }
                         }
                     }
                 }
             }
-        });
+        }
+    }
+});
+
+console.log(projectBoard);
 
         res.json(projectBoard);
     } catch (error) {
@@ -370,5 +383,32 @@ exports.getProjectByUser = async (req, res) => {
     } catch (error) {
         console.error("getProjectByUser Hatası: ", error);
         return res.status(500).json({ error: "Projeler getirilirken sunucu taraflı bir hata oluştu." });
+    }
+};
+exports.updateBackground = async (req, res) => {
+console.log("=== UPDATE BACKGROUND ===");
+console.log("Params:", req.params);
+console.log("Body:", req.body);
+
+    const { projectId } = req.params;
+    const { backgroundIndex } = req.body;
+
+    try {
+        const project = await prisma.project.update({
+            where: {
+                id: projectId
+            },
+            data: {
+                backgroundIndex
+            }
+        });
+
+        res.json(project);
+
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({
+            error: "Arka plan güncellenemedi."
+        });
     }
 };

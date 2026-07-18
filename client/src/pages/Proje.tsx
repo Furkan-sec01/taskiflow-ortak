@@ -64,6 +64,25 @@ const Proje: React.FC = () => {
     { id: 'p3', url: 'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?auto=format&fit=crop&q=80&w=2000' }
   ];
 
+  const saveBackground = async (index: number | null) => {
+  const token = localStorage.getItem("token");
+
+  try {
+    await fetch(`http://localhost:5000/api/project/${projectId}/background`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        backgroundIndex: index
+      })
+    });
+  } catch (err) {
+    console.error(err);
+  }
+};
+
   const columnColorOptions = [
     { name: "Gri", class: "bg-gray-200/90" },
     { name: "Mavi", class: "bg-blue-100/95" },
@@ -87,10 +106,18 @@ const Proje: React.FC = () => {
         headers: { "Authorization": `Bearer ${token}` }
       });
       const data = await res.json();
-      if (res.ok) {
-        setColumns(data.columns || []);
-        if (data.orgId) fetchOrgMembers(data.orgId);
-      }
+     if (res.ok) {
+    setColumns(data.columns || []);
+
+    // kayıtlı arka planı yükle
+    if (data.backgroundIndex !== undefined && presets[data.backgroundIndex]) {
+        setBgImage(presets[data.backgroundIndex].url);
+    } else {
+        setBgImage(null);
+    }
+
+    if (data.orgId) fetchOrgMembers(data.orgId);
+}
     } catch (error) { console.error("Pano yüklenemedi:", error); }
     finally { setIsLoading(false); }
   };
@@ -374,11 +401,23 @@ const Proje: React.FC = () => {
 
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-2 bg-gray-200/50 p-1.5 rounded-xl">
-            {presets.map(p => (
-              <button key={p.id} onClick={() => setBgImage(p.url)} className="w-7 h-7 rounded-lg bg-cover border-2 border-transparent hover:border-indigo-500 transition-all" style={{ backgroundImage: `url(${p.url})` }} />
-            ))}
+  {presets.map((p) => (
+  <button
+    key={p.id}
+    onClick={() => {
+      setBgImage(p.url);
+      saveBackground(presets.findIndex(x => x.id === p.id));
+    }}
+    className="w-8 h-8 rounded-full border-2 border-white shadow overflow-hidden"
+    style={{ backgroundImage: `url(${p.url})`, backgroundSize: "cover" }}
+  />
+))}
           </div>
-          <button onClick={() => setBgImage(null)} className="text-[10px] font-black text-gray-400 hover:text-red-500 uppercase tracking-widest">Temizle</button>
+          <button
+  onClick={() => {
+    setBgImage(null);
+    saveBackground(null);
+  }} className="text-[10px] font-black text-gray-400 hover:text-red-500 uppercase tracking-widest">Temizle</button>
           <button onClick={() => fileInputRef.current?.click()} className="text-xs font-black text-indigo-600 bg-white px-5 py-2.5 rounded-xl shadow-sm border border-gray-100 uppercase">Resim</button>
           <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={(e) => {
             const file = e.target.files?.[0];

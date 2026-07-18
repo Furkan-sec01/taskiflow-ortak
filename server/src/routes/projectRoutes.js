@@ -7,6 +7,10 @@ const authenticateToken = require("../middleware/authMiddleware");
 router.use(authenticateToken);
 
 router.get("/:projectId/board", projectController.getProjectBoard);
+router.put(
+    "/:projectId/background",
+    projectController.updateBackground
+);
 router.get("/", projectController.getProjects); 
 router.get("/org/:orgId", projectController.getProjectByOrg);
 router.post("/", projectController.createProject); 
