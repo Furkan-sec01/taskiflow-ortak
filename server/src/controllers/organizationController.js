@@ -93,11 +93,34 @@ exports.inviteMember = async (req, res) => {
     const {email, orgId} = req.body;
     const inviterId = req.user.id || req.user.userId;
 
+    if(!orgId){
+        return res.status(400).json({ error: "orgId zorunludur." });
+    }
+
     try{
 
         const inviter = await prisma.user.findUnique({
             where: {id: inviterId}
         });
+
+        // 🔒 Davet edenin gerçekten bu organizasyona üye olup olmadığını doğrula
+        const inviterMembership = await prisma.user_Organization.findUnique({
+            where: {
+                userId_organizationId: {
+                    userId: inviterId,
+                    organizationId: orgId
+                }
+            }
+        });
+
+        if(!inviterMembership){
+            return res.status(403).json({ error: "Bu ekibe üye davet etme yetkiniz yok." });
+        }
+
+        // Sadece ekip sahibi (OWNER) yeni üye davet edebilsin
+        if(inviterMembership.role !== "OWNER"){
+            return res.status(403).json({ error: "Sadece ekip sahibi yeni üye davet edebilir." });
+        }
 
         const targetUser = await prisma.user.findUnique({
             where: {email}
@@ -146,10 +169,24 @@ exports.inviteMember = async (req, res) => {
 }
 
 
-
+    
 exports.getMembers = async (req , res) => {
     try{
         const {orgId} = req.params;
+        const userId = req.user.id || req.user.userId;
+
+        const requesterMembership = await prisma.user_Organization.findUnique({
+            where: {
+                userId_organizationId: {
+                    userId: userId,
+                    organizationId: orgId
+                }
+            }
+        });
+
+        if (!requesterMembership) {
+            return res.status(403).json({ error: "Bu organizasyonun üye listesine erişim yetkiniz yok." });
+        }
 
         const members = await prisma.user_Organization.findMany({
             where: {organizationId: orgId},

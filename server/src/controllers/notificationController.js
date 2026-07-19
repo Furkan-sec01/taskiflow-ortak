@@ -46,6 +46,11 @@ exports.respondToInvıte = async (req, res) => {
             return res.status(404).json({ error: "Geçerli bir davet kaydı bulunamadı." });
         }
 
+        // 🔒 Bu davetin gerçekten bu isteği atan kullanıcıya ait olduğunu doğrula
+        if(invitation.userId !== currentUserId){
+            return res.status(403).json({ error: "Bu daveti yanıtlama yetkiniz yok." });
+        }
+
         if(action === "ACCEPT"){
             await prisma.$transaction(async (tx) => {
                 const isAlreadyMember = await tx.user_Organization.findUnique({
@@ -89,7 +94,17 @@ exports.respondToInvıte = async (req, res) => {
 };
 
 exports.markAsRead = async (req, res) => {
+  const userId = req.user.id || req.user.userId;
+
   try {
+    const notification = await prisma.notification.findUnique({
+      where: { id: req.params.id }
+    });
+
+    if (!notification || notification.userId !== userId) {
+      return res.status(403).json({ error: "Bu bildirimi güncelleme yetkiniz yok." });
+    }
+
     await prisma.notification.update({
       where: { id: req.params.id },
       data: { isRead: true }

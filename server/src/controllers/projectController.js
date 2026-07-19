@@ -44,6 +44,12 @@ exports.createProject = async (req, res) => {
         });
     }
 
+    if (!organizationId) {
+        return res.status(400).json({
+            error: "Proje bir ekibe/organizasyona bağlı olmalıdır. Lütfen bir ekip seçin."
+        });
+    }
+
     try {
         const subscription = await prisma.subscription.findFirst({
             where: {
@@ -75,7 +81,7 @@ exports.createProject = async (req, res) => {
                 data: {
                     title: title,
                     description: description,
-                    orgId: organizationId || null,
+                    orgId: organizationId ,
                     ownerId: userId
                 }
             });
@@ -202,33 +208,20 @@ exports.getProjectBoard = async (req, res) => {
             return res.status(403).json({ error: "Bu projenin panosuna erişim yetkiniz yok." });
         }
 
-      const projectBoard = await prisma.project.findUnique({
-    where: { id: projectId },
-    select: {
-        id: true,
-        title: true,
-        backgroundIndex: true,
-
-        columns: {
-            orderBy: { order: "asc" },
+        const projectBoard = await prisma.project.findUnique({
+            where: { id: projectId },
             include: {
-                tasks: {
+                columns: {
                     orderBy: { order: "asc" },
                     include: {
-                        assignee: {
-                            select: {
-                                name: true,
-                                email: true
-                            }
+                        tasks: {
+                            orderBy: { order: "asc" },
+                            include: { assignee: { select: { name: true, email: true } } }
                         }
                     }
                 }
             }
-        }
-    }
-});
-
-console.log(projectBoard);
+        });
 
         res.json(projectBoard);
     } catch (error) {
@@ -239,8 +232,39 @@ console.log(projectBoard);
 exports.updateTaskPosition = async (req, res) => {
     const { taskId } = req.params;
     const { columnId } = req.body;
+    const userId = req.user.id || req.user.userId;
 
     try {
+        const task = await prisma.task.findUnique({
+            where: { id: taskId },
+            include: { project: true }
+        });
+
+        if (!task) {
+            return res.status(404).json({ error: "Görev bulunamadı." });
+        }
+
+        // 🔒 Kullanıcı bu projenin sahibi mi ya da üyesi mi kontrol et
+        const isOwner = task.project.ownerId === userId;
+        const membership = await prisma.user_Project.findUnique({
+            where: {
+                userId_projectId: {
+                    userId: userId,
+                    projectId: task.projectId
+                }
+            }
+        });
+
+        if (!isOwner && !membership) {
+            return res.status(403).json({ error: "Bu görevi taşıma yetkiniz yok." });
+        }
+
+        // 🔒 Hedef sütunun aynı projeye ait olduğunu doğrula (başka projeye kaçırılmasın)
+        const targetColumn = await prisma.column.findUnique({ where: { id: columnId } });
+        if (!targetColumn || targetColumn.projectId !== task.projectId) {
+            return res.status(400).json({ error: "Geçersiz sütun." });
+        }
+
         const updatedTask = await prisma.task.update({
             where: { id: taskId },
             data: {
@@ -383,32 +407,5 @@ exports.getProjectByUser = async (req, res) => {
     } catch (error) {
         console.error("getProjectByUser Hatası: ", error);
         return res.status(500).json({ error: "Projeler getirilirken sunucu taraflı bir hata oluştu." });
-    }
-};
-exports.updateBackground = async (req, res) => {
-console.log("=== UPDATE BACKGROUND ===");
-console.log("Params:", req.params);
-console.log("Body:", req.body);
-
-    const { projectId } = req.params;
-    const { backgroundIndex } = req.body;
-
-    try {
-        const project = await prisma.project.update({
-            where: {
-                id: projectId
-            },
-            data: {
-                backgroundIndex
-            }
-        });
-
-        res.json(project);
-
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({
-            error: "Arka plan güncellenemedi."
-        });
     }
 };
