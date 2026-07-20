@@ -2,14 +2,27 @@ const {PrismaClient} = require("@prisma/client");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const prisma = new PrismaClient();
-
+const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const JWT_SECRET = process.env.JWT_SECRET;
 
 //kayıt ol
 exports.register = async (req, res) => {
-  const { email, password, name } = req.body;
+  const { password, name } = req.body;
+  const email = typeof req.body.email === "string" ? req.body.email.trim().toLowerCase() : "";
 
   try {
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({ error: "Geçerli bir e-posta adresi giriniz." });
+    }
+
+    if (typeof name !== "string" || name.trim().length < 2) {
+      return res.status(400).json({ error: "İsim en az 2 karakter olmalıdır." });
+    }
+
+    if (typeof password !== "string" || password.length < 6) {
+      return res.status(400).json({ error: "Şifre en az 6 karakter olmalıdır." });
+    }
+
     const user = await prisma.user.findUnique({
       where: {email}
     });
@@ -81,26 +94,34 @@ exports.register = async (req, res) => {
 
 //login
 exports.login = async (req,res) => {
-  const {email, password} = req.body;
+  const password = req.body.password;
+  const email = typeof req.body.email === "string" ? req.body.email.trim().toLowerCase() : "";
+
+  const invalidCredentials = () => res.status(401).json({ error: "E-posta veya şifre hatalı." });
 
   try{
-    const user= await prisma.user.findUnique({
-  where: {email},
-  include:  {
-    organizations: {
-      select: {
-        organizationId: true,
-        organization: true,
-        role: true
-      }
+    if (!email || typeof password !== "string" || !password) {
+      return invalidCredentials();
     }
-  }
-});
 
-    if(!user) return await res.status(404).json({error: "Kullanıcı Yok."});
+    const user= await prisma.user.findUnique({
+      where: {email},
+      include: {
+        organizations: {
+          select: {
+            organizationId: true,
+            organization: true,
+            role: true
+          }
+        }
+      }
+    });
+
+    // Kullanıcı bulunamadıysa da şifre yanlışmış gibi aynı mesajı dön 
+    if(!user || !user.password) return invalidCredentials();
 
     const isValid = await bcrypt.compare(password, user.password);
-    if (!isValid) return res.status(401).json({ error: "Şifre yanlış." });
+    if (!isValid) return invalidCredentials();
 
     const activeOrgId = user.organizations.length > 0 ? user.organizations[0].organizationId : null;
 
