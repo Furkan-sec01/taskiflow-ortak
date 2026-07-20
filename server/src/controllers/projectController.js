@@ -180,6 +180,49 @@ exports.deleteProject = async (req, res) => {
         res.status(500).json({ error: "Proje silinirken bir hata oluştu." });
     }
 };
+exports.updateBackground = async (req, res) => {
+    const { projectId } = req.params;
+    const { backgroundIndex } = req.body;
+    const userId = req.user.id || req.user.userId;
+
+    try {
+        if (backgroundIndex === undefined || backgroundIndex === null) {
+            return res.status(400).json({ error: "backgroundIndex zorunludur." });
+        }
+
+        const project = await prisma.project.findUnique({
+            where: { id: projectId }
+        });
+
+        if (!project) {
+            return res.status(404).json({ error: "Proje bulunamadı." });
+        }
+
+        const isOwner = project.ownerId === userId;
+        const membership = await prisma.user_Project.findUnique({
+            where: {
+                userId_projectId: { userId, projectId }
+            }
+        });
+
+        if (!isOwner && !membership) {
+            return res.status(403).json({ error: "Bu projenin arkaplanını değiştirme yetkiniz yok." });
+        }
+
+        const updatedProject = await prisma.project.update({
+            where: { id: projectId },
+            data: { backgroundIndex: Number(backgroundIndex) }
+        });
+
+        res.status(200).json({
+            message: "Arkaplan başarıyla güncellendi.",
+            project: updatedProject
+        });
+    } catch (error) {
+        console.error("updateBackground Hatası:", error);
+        res.status(500).json({ error: "Arkaplan güncellenirken bir hata oluştu." });
+    }
+};
 
 exports.getProjectBoard = async (req, res) => {
     const { projectId } = req.params;
