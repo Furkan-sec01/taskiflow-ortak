@@ -26,7 +26,6 @@ const getAIChatResponse = async (req, res) => {
     console.error(error);
     res.status(500).json({
       error: "AI yanıt veremedi.",
-      details: error.message,
     });
   }
 };

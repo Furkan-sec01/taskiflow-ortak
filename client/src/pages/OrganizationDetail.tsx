@@ -104,10 +104,15 @@ const OrganizationDetail = () => {
         },
         body: JSON.stringify({ email: inviteEmail, orgId: orgId })
       });
+
+      const data = await res.json();
+
       if (res.ok) {
         alert("Davet başarıyla gönderildi!");
         setIsInviteModalOpen(false);
         setInviteEmail("");
+      } else {
+        alert(data.error || "Davet gönderilemedi.");
       }
     } catch (error) {
       alert("Sunucu bağlantı hatası.");

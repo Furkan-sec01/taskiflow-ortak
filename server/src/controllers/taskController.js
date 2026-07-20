@@ -54,11 +54,24 @@ exports.createTask = async (req, res) => {
             return res.status(404).json({error: "Proje Bulunamadı."});
         }
 
-        if(userId !== project.ownerId){
-            return res.status(400).json({error: "Görev ekleme yetkiniz yok."});
-        }
+if(userId !== project.ownerId){
+    return res.status(400).json({error: "Görev ekleme yetkiniz yok."});
+}
 
-        await prisma.task.create({
+    // Atanan kişinin gerçekten bu projenin üyesi (veya sahibi) olduğunu doğrula
+        if (assignee.id !== project.ownerId) {
+            const assigneeMembership = await prisma.user_Project.findUnique({
+        where: {
+            userId_projectId: { userId: assignee.id, projectId }
+        }
+    });
+
+         if (!assigneeMembership) {
+            return res.status(400).json({ error: "Bu kişi bu projenin üyesi değil." });
+    }
+} 
+
+await prisma.task.create({
             data: {
                 title: title,
                 ownerId: user.id,
