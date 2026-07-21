@@ -1,6 +1,8 @@
 const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
 const bcrypt = require("bcryptjs");
+const path = require("path");
+const fs = require("fs");
 
 exports.getMe = async (req, res) => {
   try {
@@ -17,6 +19,7 @@ exports.getMe = async (req, res) => {
         name: true,
         email: true,
         username: true,
+        avatarUrl: true,
         notificationEnabled: true,
         phone: true,
         bio: true,
@@ -231,6 +234,7 @@ exports.updateProfile = async (req, res) => {
         name: true,
         email: true,
         username: true,
+        avatarUrl: true,
         phone: true,
         bio: true,
         department: true,
@@ -354,4 +358,44 @@ exports.changePassword = async (req, res) => {
       .json({ error: "Sunucu hatası. Lütfen daha sonra tekrar deneyin." });
   }
 
+};
+  
+  exports.uploadAvatar = async (req, res) => {
+    try {
+      const userId = req.user?.userId || req.user?.id;
+
+    if (!userId) {
+      return res.status(401).json({ error: "Yetkisiz erişim." });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ error: "Resim dosyası bulunamadı." });
+    }
+
+    const existingUser = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { avatarUrl: true },
+    });
+
+    const avatarUrl = `/uploads/avatars/${req.file.filename}`;
+
+    const updatedUser = await prisma.user.update({
+      where: { id: userId },
+      data: { avatarUrl },
+      select: { id: true, avatarUrl: true },
+    });
+
+    if (existingUser?.avatarUrl) {
+      const oldFilePath = path.join(__dirname, "..", "..", existingUser.avatarUrl);
+      fs.unlink(oldFilePath, () => {});
+    }
+
+    return res.json({
+      message: "Profil fotoğrafı güncellendi.",
+      avatarUrl: updatedUser.avatarUrl,
+    });
+  } catch (error) {
+    console.error("UploadAvatar Hatası:", error);
+    return res.status(500).json({ error: "Fotoğraf yüklenirken bir hata oluştu." });
+  }
 };

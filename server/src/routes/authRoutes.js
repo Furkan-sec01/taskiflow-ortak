@@ -3,7 +3,7 @@ const rateLimit = require("express-rate-limit");
 const router = express.Router();
 const authController = require("../controllers/authController");
 
-// kullanıcı 15 dakikada en fazla 10 deneme yapabilir
+// 🔒 15 dakikada en fazla 10 deneme (brute-force / credential stuffing koruması)
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 10,

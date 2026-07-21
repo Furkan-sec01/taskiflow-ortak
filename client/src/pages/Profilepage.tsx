@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Pencil, Upload, User, Mail, Clock } from "lucide-react";
 
 interface ProfileData {
@@ -8,10 +8,12 @@ interface ProfileData {
   email: string;
   phone: string;
   location: string;
+  avatarUrl?: string;
 }
+ const API_BASE = "http://localhost:5000";
 
 export default function ProfilePage() {
-  const [editing, setEditing] = useState(false);
+ const [editing, setEditing] = useState(false);
  const [profile, setProfile] = useState<ProfileData>({
   fullName: "",
   username: "",
@@ -19,10 +21,14 @@ export default function ProfilePage() {
   email: "",
   phone: "",
   location: "",
+  avatarUrl: "",
 });
   const [draft, setDraft] = useState<ProfileData>(profile);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [avatarError, setAvatarError] = useState("");
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
   const storedUser = localStorage.getItem("user");
@@ -37,6 +43,7 @@ export default function ProfilePage() {
       email: user.email || "",
       phone: user.phone || "",
       location: user.location || "",
+      avatarUrl: user.avatarUrl || "",
     };
 
     setProfile(userData);
@@ -100,6 +107,61 @@ export default function ProfilePage() {
     setDraft(profile);
     setEditing(false);
   };
+  const handleAvatarClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setAvatarError("");
+
+    const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
+    if (!allowedTypes.includes(file.type)) {
+      setAvatarError("Sadece JPEG, PNG veya WEBP formatında resim yükleyebilirsiniz.");
+      return;
+    }
+    if (file.size > 3 * 1024 * 1024) {
+      setAvatarError("Resim boyutu en fazla 3MB olabilir.");
+      return;
+    }
+
+    setUploadingAvatar(true);
+
+    try {
+      const token = localStorage.getItem("token");
+      const formData = new FormData();
+      formData.append("avatar", file);
+
+      const res = await fetch(`${API_BASE}/api/users/avatar`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: formData,
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || "Fotoğraf yüklenemedi.");
+      }
+
+      const updatedProfile = { ...profile, avatarUrl: data.avatarUrl };
+      setProfile(updatedProfile);
+      setDraft(updatedProfile);
+
+      const storedUser = localStorage.getItem("user");
+      const currentUser = storedUser ? JSON.parse(storedUser) : {};
+      localStorage.setItem("user", JSON.stringify({ ...currentUser, avatarUrl: data.avatarUrl }));
+    } catch (err) {
+      setAvatarError(err instanceof Error ? err.message : "Bir hata oluştu.");
+    } finally {
+      setUploadingAvatar(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 p-7">
@@ -123,14 +185,36 @@ export default function ProfilePage() {
       {/* Hero Card */}
       <div className="bg-white border border-gray-100 rounded-xl p-6 mb-4 flex items-center gap-5 dark:bg-gray-900 dark:border-gray-700">
         <div className="relative shrink-0">
-          <div className="w-[72px] h-[72px] rounded-full bg-[#4F6EF7] flex items-center justify-center text-white text-2xl font-medium">
-            S
-          </div>
-          <button className="absolute bottom-0 right-0 w-6 h-6 bg-white border border-gray-200 rounded-full flex items-center justify-center hover:bg-gray-50 dark:bg-gray-800 dark:border-gray-600 dark:hover:bg-gray-700">
+          {profile.avatarUrl ? (
+            <img
+              src={`${API_BASE}${profile.avatarUrl}`}
+              alt="Profil fotoğrafı"
+              className="w-[72px] h-[72px] rounded-full object-cover border border-gray-200 dark:border-gray-700"
+            />
+          ) : (
+            <div className="w-[72px] h-[72px] rounded-full bg-[#4F6EF7] flex items-center justify-center text-white text-2xl font-medium">
+              {profile.fullName?.trim()?.[0]?.toUpperCase() || "?"}
+            </div>
+          )}
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleAvatarChange}
+            accept="image/jpeg,image/png,image/webp"
+            className="hidden"
+          />
+          <button
+            onClick={handleAvatarClick}
+            disabled={uploadingAvatar}
+            className="absolute bottom-0 right-0 w-6 h-6 bg-white border border-gray-200 rounded-full flex items-center justify-center hover:bg-gray-50 disabled:opacity-60 dark:bg-gray-800 dark:border-gray-600 dark:hover:bg-gray-700"
+          >
             <Upload size={11} className="text-gray-500 dark:text-gray-400" />
           </button>
         </div>
         <div>
+          {avatarError && (
+            <p className="text-xs text-red-600 dark:text-red-400 mb-1">{avatarError}</p>
+          )}
           <p className="text-[19px] font-medium text-gray-900 dark:text-gray-100 mb-0.5">
             {profile.fullName}
           </p>

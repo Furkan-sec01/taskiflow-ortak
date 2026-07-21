@@ -32,6 +32,7 @@ model User {
   profileRole       String?
   notificationEnabled Boolean @default(true)
   location          String?
+  avatarUrl         String?
 
   organizations     User_Organization[]
   ownedProjects     Project[]             @relation("ProjectOwner")

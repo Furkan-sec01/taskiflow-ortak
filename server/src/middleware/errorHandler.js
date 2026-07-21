@@ -4,6 +4,10 @@ function errorHandler(err, req, res, next) {
 
   console.error(`[HATA] ${req.method} ${req.originalUrl} ->`, err);
 
+  if (err.name === "MulterError" || err.message?.includes("JPEG, PNG veya WEBP")) {
+    return res.status(400).json({ error: err.message || "Dosya yüklenirken bir hata oluştu." });
+  }
+
   if (err.code === "P2002") {
     return res.status(409).json({ error: "Bu kayıt zaten mevcut (benzersizlik ihlali)." });
   }
