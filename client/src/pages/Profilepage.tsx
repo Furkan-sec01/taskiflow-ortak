@@ -344,7 +344,7 @@ setDraft((prev) => ({
     value: stats.projectCount,
   },
   {
-    label: "Takım üyesi",
+    label: "Organizasyonlar",
     value: stats.teamMemberCount,
   },
 ].map((s) => (

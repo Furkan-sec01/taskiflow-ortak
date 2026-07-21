@@ -40,19 +40,52 @@ const Notifications = () => {
   }, []);
 
   const markAsRead = (id: string) => {
-    setNotifications(prev => prev.map(n => n.id === id ? { ...n, isRead: true } : n));
-    fetch(`http://localhost:5000/api/notifications/${id}/read`, { method: "PATCH" }).catch(console.error);
-  };
+  setNotifications(prev => prev.map(n => n.id === id ? { ...n, isRead: true } : n));
+
+  fetch(`http://localhost:5000/api/notifications/${id}/read`, {
+    method: "PATCH",
+    headers: {
+      Authorization: `Bearer ${localStorage.getItem("token")}`,
+    },
+  }).catch(console.error);
+};
 
   const markAllAsRead = () => {
-    setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
-    fetch(`http://localhost:5000/api/notifications/read-all`, { method: "PATCH" }).catch(console.error);
-  };
+  setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
 
-  const deleteNotification = (id: string) => {
-    setNotifications(prev => prev.filter(n => n.id !== id));
-    fetch(`http://localhost:5000/api/notifications/${id}`, { method: "DELETE" }).catch(console.error);
-  };
+  fetch(`http://localhost:5000/api/notifications/read-all`, {
+    method: "PATCH",
+    headers: {
+      Authorization: `Bearer ${localStorage.getItem("token")}`,
+    },
+  }).catch(console.error);
+};
+
+const deleteNotification = async (id: string) => {
+  // 1. Önce anlık olarak arayüzden kaldırıyoruz
+  const previousNotifications = [...notifications];
+  setNotifications(prev => prev.filter(n => n.id !== id));
+
+  try {
+    // 2. Sunucuya Token (Authorization Header) ile silme isteği gönderiyoruz
+    const res = await fetch(`http://localhost:5000/api/notifications/${id}`, {
+      method: "DELETE",
+      headers: {
+        "Authorization": `Bearer ${localStorage.getItem("token")}`,
+        "Content-Type": "application/json"
+      }
+    });
+
+    if (!res.ok) {
+      throw new Error("Silme işlemi sunucuda başarısız oldu.");
+    }
+  } catch (error) {
+    console.error("Silme hatası:", error);
+    // Sunucuda silinemezse eski listeyi geri yüklüyoruz
+    setNotifications(previousNotifications);
+    alert("Bildirim silinemedi, lütfen tekrar deneyin.");
+  }
+};
 
   const filteredNotifications = notifications.filter(n => {
     if (filter === "okunmadı") return !n.isRead;

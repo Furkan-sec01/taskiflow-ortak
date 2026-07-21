@@ -8,10 +8,9 @@ exports.getNotifications = async (req, res) =>{
     try{
 
         const notifications = await prisma.notification.findMany({
-            where: {
-                userId,
-                isRead: false
-            },
+        where: {
+        userId,
+         },
             include: {
                 organization: {
                     select: {
@@ -111,6 +110,57 @@ exports.markAsRead = async (req, res) => {
     });
     res.json({ message: "Okundu işaretlendi." });
   } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+exports.markAllAsRead = async (req, res) => {
+  const userId = req.user.id || req.user.userId;
+
+  try {
+    await prisma.notification.updateMany({
+      where: {
+        userId,
+        isRead: false,
+      },
+      data: {
+        isRead: true,
+      },
+    });
+
+    res.json({
+      message: "Tüm bildirimler okundu.",
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      error: error.message,
+    });
+  }
+};
+
+exports.deleteNotification = async (req, res) => {
+  const userId = req.user.id || req.user.userId;
+
+  try {
+    const notification = await prisma.notification.findUnique({
+      where: { id: req.params.id }
+    });
+
+    if (!notification) {
+      return res.status(404).json({ error: "Bildirim bulunamadı." });
+    }
+
+    if (notification.userId !== userId) {
+      return res.status(403).json({ error: "Bu bildirimi silme yetkiniz yok." });
+    }
+
+    await prisma.notification.delete({
+      where: { id: req.params.id }
+    });
+
+    res.json({ message: "Bildirim başarıyla silindi." });
+  } catch (error) {
+    console.error("Silme Hatası: ", error);
     res.status(500).json({ error: error.message });
   }
 };
