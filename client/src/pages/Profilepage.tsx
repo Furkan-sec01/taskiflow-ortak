@@ -9,12 +9,15 @@ interface ProfileData {
   phone: string;
   location: string;
   avatarUrl?: string;
-}
+
+  role: string;
+  plan: string;
+  subscriptionStatus: string;}
  const API_BASE = "http://localhost:5000";
 
 export default function ProfilePage() {
  const [editing, setEditing] = useState(false);
- const [profile, setProfile] = useState<ProfileData>({
+const [profile, setProfile] = useState<ProfileData>({
   fullName: "",
   username: "",
   bio: "",
@@ -22,8 +25,27 @@ export default function ProfilePage() {
   phone: "",
   location: "",
   avatarUrl: "",
+
+  role: "",
+  plan: "",
+  status: "",
 });
   const [draft, setDraft] = useState<ProfileData>(profile);
+  const [stats, setStats] = useState({
+  completedTaskCount: 0,
+  projectCount: 0,
+  teamMemberCount: 0,
+});
+
+const [activities, setActivities] = useState<
+  {
+    id: string;
+    title: string;
+    message: string;
+    createdAt: string;
+  }[]
+>([]);
+
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
@@ -31,24 +53,46 @@ export default function ProfilePage() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
-  const storedUser = localStorage.getItem("user");
+  const token = localStorage.getItem("token");
 
-  if (storedUser) {
-    const user = JSON.parse(storedUser);
+  if (!token) return;
 
-    const userData = {
-      fullName: user.fullName || user.name || "",
-      username: user.username || "",
-      bio: user.bio || "",
-      email: user.email || "",
-      phone: user.phone || "",
-      location: user.location || "",
-      avatarUrl: user.avatarUrl || "",
-    };
+  fetch("http://localhost:5000/api/users/me", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  })
+    .then((res) => res.json())
+    .then((data) => {
+      console.log(data);
 
-    setProfile(userData);
-    setDraft(userData);
-  }
+      const userData = {
+  fullName: data.name || "",
+  username: data.username || "",
+  bio: data.bio || "",
+  email: data.email || "",
+  phone: data.phone || "",
+  location: data.location || "",
+  avatarUrl: data.avatarUrl || "",
+role: data.role || "",
+plan: data.plan || "",
+subscriptionStatus: data.subscriptionStatus || "",
+};
+
+      setProfile(userData);
+      setDraft(userData);
+
+      setStats({
+        completedTaskCount: data.stats?.completedTaskCount ?? 0,
+        projectCount: data.stats?.projectCount ?? 0,
+        teamMemberCount:
+          data.organizations?.length ??
+          data.myOrganizations?.length ??
+          0,
+      });
+
+      setActivities(data.notifications || []);
+    });
 }, []);
 
   const handleChange = (key: keyof ProfileData, value: string) => {
@@ -93,8 +137,12 @@ export default function ProfilePage() {
       };
       localStorage.setItem("user", JSON.stringify(updatedUser));
 
-      setProfile(draft);
-      setEditing(false);
+setProfile({
+  ...draft,
+  role: profile.role,
+  plan: profile.plan,
+  subscriptionStatus: profile.subscriptionStatus,
+});      setEditing(false);
     } catch (err) {
       console.error(err);
       setSaveError(err instanceof Error ? err.message : "Bir hata oluştu.");
@@ -107,6 +155,38 @@ export default function ProfilePage() {
     setDraft(profile);
     setEditing(false);
   };
+
+const formatTimeAgo = (dateString: string) => {
+  const now = new Date();
+  const date = new Date(dateString);
+
+  const diff = now.getTime() - date.getTime();
+
+  const minutes = Math.floor(diff / 60000);
+
+  if (minutes < 1) return "Az önce";
+  if (minutes < 60) return `${minutes} dakika önce`;
+
+  const hours = Math.floor(minutes / 60);
+
+  if (hours < 24) return `${hours} saat önce`;
+
+  const days = Math.floor(hours / 24);
+
+  if (days === 1) return "Dün";
+  if (days < 7) return `${days} gün önce`;
+
+  const weeks = Math.floor(days / 7);
+
+  if (weeks < 4) return `${weeks} hafta önce`;
+
+  const months = Math.floor(days / 30);
+
+  if (months < 12) return `${months} ay önce`;
+
+  return `${Math.floor(days / 365)} yıl önce`;
+};
+
   const handleAvatarClick = () => {
     fileInputRef.current?.click();
   };
@@ -148,9 +228,15 @@ export default function ProfilePage() {
         throw new Error(data.error || "Fotoğraf yüklenemedi.");
       }
 
-      const updatedProfile = { ...profile, avatarUrl: data.avatarUrl };
-      setProfile(updatedProfile);
-      setDraft(updatedProfile);
+      setProfile((prev) => ({
+  ...prev,
+  avatarUrl: data.avatarUrl,
+}));
+
+setDraft((prev) => ({
+  ...prev,
+  avatarUrl: data.avatarUrl,
+}));
 
       const storedUser = localStorage.getItem("user");
       const currentUser = storedUser ? JSON.parse(storedUser) : {};
@@ -218,30 +304,50 @@ export default function ProfilePage() {
           <p className="text-[19px] font-medium text-gray-900 dark:text-gray-100 mb-0.5">
             {profile.fullName}
           </p>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mb-2.5">
-            Proje Yöneticisi · TaskiFlow
-          </p>
-          <div className="flex gap-2 flex-wrap">
-            <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
-              Pro plan
-            </span>
-            <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300">
-              Aktif
-            </span>
-            <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
-              Admin
-            </span>
-          </div>
+         <p className="text-sm text-gray-500 dark:text-gray-400 mb-2.5">
+{profile.role === "OWNER"
+  ? "Owner"
+  : profile.role === "ADMIN"
+  ? "Admin"
+  : "Owner"}
+</p>
+          
+        <div className="flex gap-2 flex-wrap">
+  <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
+    {profile.plan === "FREE" ? "Free Plan" : "Pro Plan"}
+  </span>
+
+  <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300">
+{profile.subscriptionStatus === "ACTIVE" ? "Aktif" : "Pasif"}
+  </span>
+
+  <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
+    {profile.role === "OWNER"
+      ? "Owner"
+      : profile.role === "ADMIN"
+      ? "Admin"
+      : "Owner"}
+  </span>
+</div>
         </div>
       </div>
 
       {/* Stats */}
       <div className="grid grid-cols-3 gap-3 mb-4">
         {[
-          { label: "Tamamlanan görev", value: 48 },
-          { label: "Aktif proje", value: 7 },
-          { label: "Takım üyesi", value: 12 },
-        ].map((s) => (
+  {
+    label: "Tamamlanan görev",
+    value: stats.completedTaskCount,
+  },
+  {
+    label: "Aktif proje",
+    value: stats.projectCount,
+  },
+  {
+    label: "Takım üyesi",
+    value: stats.teamMemberCount,
+  },
+].map((s) => (
           <div key={s.label} className="bg-gray-100 rounded-lg px-4 py-3.5 dark:bg-gray-800">
             <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{s.label}</p>
             <p className="text-[22px] font-medium text-gray-900 dark:text-gray-100">{s.value}</p>
@@ -274,34 +380,42 @@ export default function ProfilePage() {
         </div>
       </div>
 
-      {/* Activity */}
-      <div className="bg-white border border-gray-100 rounded-xl p-5 mb-4 dark:bg-gray-900 dark:border-gray-700">
-        <p className="text-sm font-medium text-gray-800 dark:text-gray-200 mb-3 flex items-center gap-2">
-          <Clock size={14} className="text-gray-400 dark:text-gray-500" />
-          Son aktivite
-        </p>
-        {[
-          { color: "#4F6EF7", text: "Yeni görev: ", bold: "UI tasarım revizyonu", time: "2 saat önce" },
-          { color: "#22c55e", text: "Proje tamamlandı: ", bold: "Backend API", time: "Dün" },
-          { color: "#f59e0b", text: "Takım üyesi eklendi: ", bold: "Elif K.", time: "3 gün önce" },
-        ].map((a, i) => (
-          <div
-            key={i}
-            className="flex items-center gap-2.5 py-2.5 border-b border-gray-100 last:border-none dark:border-gray-700"
-          >
-            <span
-              className="w-2 h-2 rounded-full shrink-0"
-              style={{ background: a.color }}
-            />
-            <span className="text-sm text-gray-800 dark:text-gray-200 flex-1">
-              {a.text}
-              <strong className="font-medium">{a.bold}</strong>
-            </span>
-            <span className="text-xs text-gray-400 dark:text-gray-500">{a.time}</span>
-          </div>
-        ))}
-      </div>
+     {/* Activity */}
+<div className="bg-white border border-gray-100 rounded-xl p-5 mb-4 dark:bg-gray-900 dark:border-gray-700">
+  <p className="text-sm font-medium text-gray-800 dark:text-gray-200 mb-3 flex items-center gap-2">
+    <Clock size={14} className="text-gray-400 dark:text-gray-500" />
+    Son aktivite
+  </p>
 
+  {activities.length === 0 ? (
+    <p className="text-sm text-gray-500 dark:text-gray-400">
+      Henüz aktivite bulunmuyor.
+    </p>
+  ) : (
+    activities.map((activity) => (
+      <div
+        key={activity.id}
+        className="flex items-center gap-2.5 py-2.5 border-b border-gray-100 last:border-none dark:border-gray-700"
+      >
+        <span className="w-2 h-2 rounded-full shrink-0 bg-blue-500" />
+
+        <div className="flex-1">
+          <p className="text-sm text-gray-800 dark:text-gray-200 font-medium">
+            {activity.title}
+          </p>
+
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            {activity.message}
+          </p>
+        </div>
+
+        <span className="text-xs text-gray-400 dark:text-gray-500">
+          {formatTimeAgo(activity.createdAt)}
+        </span>
+      </div>
+    ))
+  )}
+</div>
       {/* Save Bar */}
       {editing && (
         <div>

@@ -13,40 +13,66 @@ exports.getMe = async (req, res) => {
     }
 
     const user = await prisma.user.findUnique({
-      where: { id: userId },
+  where: { id: userId },
+  select: {
+    id: true,
+    name: true,
+    email: true,
+    username: true,
+    avatarUrl: true,
+    notificationEnabled: true,
+    phone: true,
+    bio: true,
+    department: true,
+    profileRole: true,
+    location: true,
+    status: true,
+    createdAt: true,
+
+    organizations: {
       select: {
-        id: true,
-        name: true,
-        email: true,
-        username: true,
-        avatarUrl: true,
-        notificationEnabled: true,
-        phone: true,
-        bio: true,
-        department: true,
-        profileRole: true,
-        location: true,
-        status: true,
-        createdAt: true,
-        organizations: {
+        role: true,
+        organization: {
           select: {
-            role: true,
-            organization: {
-              select: {
-                id: true,
-                name: true,
-              },
-            },
+            id: true,
+            name: true,
           },
         },
       },
-    });
+    },
 
-    if (!user) {
-      return res.status(404).json({ error: "Kullanıcı bulunamadı." });
-    }
+    subscriptions: {
+      orderBy: {
+        createdAt: "desc",
+      },
+      take: 1,
+      select: {
+        plan: true,
+        status: true,
+      },
+    },
+
+    notifications: {
+      orderBy: {
+        createdAt: "desc",
+      },
+      take: 10,
+      select: {
+        id: true,
+        title: true,
+        message: true,
+        createdAt: true,
+      },
+    },
+  },
+});
 
     // 🔥 İSTATİSTİKLER
+    const teamMemberCount = await prisma.user_Organization.count({
+  where: {
+    organizationId: user.organizations[0]?.organization.id,
+  },
+});
     const projectCount = await prisma.project.count({
       where: {
         OR: [
@@ -78,24 +104,42 @@ exports.getMe = async (req, res) => {
         ],
       },
     });
+if (!user) {
+  return res.status(404).json({
+    error: "Kullanıcı bulunamadı.",
+  });
+}
+const formattedUser = {
+  ...user,
 
-    const formattedUser = {
-      ...user,
-      myOrganizations: (user.organizations || []).map((item) => ({
-        id: item.organization.id,
-        name: item.organization.name,
-        role: item.role,
-      })),
-    };
+  myOrganizations: user.organizations.map((o) => ({
+    id: o.organization.id,
+    name: o.organization.name,
+    role: o.role,
+  })),
 
-    return res.json({
-      ...formattedUser,
-      stats: {
-        projectCount,
-        taskCount,
-        completedTaskCount,
-      },
-    });
+  role: user.organizations.find(o => o.role === "OWNER")?.role
+        || user.organizations[0]?.role
+        || "MEMBER",
+
+  plan: user.subscriptions[0]?.plan || "FREE",
+
+  subscriptionStatus: user.subscriptions.length
+  ? user.subscriptions[0].status
+  : "INACTIVE",
+};
+
+ return res.json({
+  ...formattedUser,
+
+  stats: {
+    projectCount,
+    taskCount,
+    completedTaskCount,
+    teamMemberCount,
+  },
+});
+       
 
   } catch (error) {
     console.error("GetMe Hatası:", error);
@@ -309,6 +353,7 @@ exports.changePassword = async (req, res) => {
     }
 
     const user = await prisma.user.findUnique({
+ 
       where: { id: userId },
       select: {
         id: true,
