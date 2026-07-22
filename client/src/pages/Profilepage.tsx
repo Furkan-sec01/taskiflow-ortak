@@ -28,7 +28,7 @@ const [profile, setProfile] = useState<ProfileData>({
 
   role: "",
   plan: "",
-  status: "",
+  subscriptionStatus: ""
 });
   const [draft, setDraft] = useState<ProfileData>(profile);
   const [stats, setStats] = useState({

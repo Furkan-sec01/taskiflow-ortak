@@ -180,6 +180,32 @@ export default function Sidebar() {
     return () => window.removeEventListener("teams-updated", handler);
   }, []);
 
+
+const [unreadCount, setUnreadCount] = useState<number>(0);
+
+useEffect(() => {
+  const fetchUnreadCount = async () => {
+    const token = localStorage.getItem("token");
+    if (!token) return;
+    try {
+      const res = await fetch("http://localhost:5000/api/notifications", {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (res.ok && Array.isArray(data)) {
+        // Okunmamış (isRead: false) bildirimlerin sayısını buluyoruz
+        const unread = data.filter((n: any) => !n.isRead).length;
+        setUnreadCount(unread);
+      }
+    } catch (err) {
+      console.error("Bildirim sayısı çekilemedi:", err);
+    }
+  };
+
+  fetchUnreadCount();
+}, []);
+
+
   const getInitials = (name: string) => {
     if (!name) return "??";
     const parts = name.split(" ");
@@ -280,7 +306,7 @@ export default function Sidebar() {
       {/* Main shortcuts */}
       {mode === "main" && (
         <div className="px-2.5 pt-1.5 pb-0.5">
-          <NavButton iconKey="Inbox" label="Inbox" badge={3} to="/inbox" />
+          <NavButton iconKey="Inbox" label="Inbox" badge={unreadCount} to="/inbox" />
           <NavButton iconKey="Circle" label="My issues" to="/tasks" />
         </div>
       )}

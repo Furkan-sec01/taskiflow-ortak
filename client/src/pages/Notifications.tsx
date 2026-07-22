@@ -62,30 +62,33 @@ const Notifications = () => {
 };
 
 const deleteNotification = async (id: string) => {
-  // 1. Önce anlık olarak arayüzden kaldırıyoruz
-  const previousNotifications = [...notifications];
-  setNotifications(prev => prev.filter(n => n.id !== id));
+    // 1. Önce anlık olarak arayüzden kaldırıyoruz
+    const previousNotifications = [...notifications];
+    setNotifications(prev => prev.filter(n => n.id !== id));
 
-  try {
-    // 2. Sunucuya Token (Authorization Header) ile silme isteği gönderiyoruz
-    const res = await fetch(`http://localhost:5000/api/notifications/${id}`, {
-      method: "DELETE",
-      headers: {
-        "Authorization": `Bearer ${localStorage.getItem("token")}`,
-        "Content-Type": "application/json"
+    try {
+      const res = await fetch(`http://localhost:5000/api/notifications/${id}`, {
+        method: "DELETE",
+        headers: {
+          "Authorization": `Bearer ${localStorage.getItem("token")}`,
+          "Content-Type": "application/json"
+        }
+      });
+
+      if (!res.ok) {
+        throw new Error("Silme işlemi sunucuda başarısız oldu.");
       }
-    });
 
-    if (!res.ok) {
-      throw new Error("Silme işlemi sunucuda başarısız oldu.");
+      // Silme başarılı olunca sayfayı yeniliyoruz
+      window.location.reload();
+
+    } catch (error) {
+      console.error("Silme hatası:", error);
+      // Sunucuda silinemezse eski listeyi geri yüklüyoruz
+      setNotifications(previousNotifications);
+      alert("Bildirim silinemedi, lütfen tekrar deneyin.");
     }
-  } catch (error) {
-    console.error("Silme hatası:", error);
-    // Sunucuda silinemezse eski listeyi geri yüklüyoruz
-    setNotifications(previousNotifications);
-    alert("Bildirim silinemedi, lütfen tekrar deneyin.");
-  }
-};
+  };
 
   const filteredNotifications = notifications.filter(n => {
     if (filter === "okunmadı") return !n.isRead;
