@@ -1,3 +1,4 @@
+import toast from "react-hot-toast";
 import { useState, useEffect } from "react";
 import { Lock, Shield, Monitor, Smartphone, AlertTriangle, Eye, EyeOff } from "lucide-react";
 
@@ -168,7 +169,7 @@ export default function SecurityPage() {
       if (!res.ok) throw new Error("Oturum sonlandırılamadı.");
       setSessions((prev) => prev.filter((s) => s.id !== sessionId));
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Bir hata oluştu.");
+      toast.error(err instanceof Error ? err.message : "Bir hata oluştu.");
     }
   };
 
@@ -182,7 +183,7 @@ export default function SecurityPage() {
       if (!res.ok) throw new Error("Oturumlar sonlandırılamadı.");
       setSessions((prev) => prev.filter((s) => s.current));
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Bir hata oluştu.");
+      toast.error(err instanceof Error ? err.message : "Bir hata oluştu.");
     }
   };
 

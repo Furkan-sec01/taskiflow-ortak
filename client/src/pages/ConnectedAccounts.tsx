@@ -1,3 +1,4 @@
+import toast from "react-hot-toast";
 import React, { useEffect, useState } from "react";
 
 type SessionItem = {
@@ -45,7 +46,7 @@ const ConnectedAccounts: React.FC = () => {
       if (!res.ok) throw new Error("Oturum sonlandırılamadı.");
       setDevices((prev) => prev.filter((d) => d.id !== sessionId));
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Bir hata oluştu.");
+      toast.error(err instanceof Error ? err.message : "Bir hata oluştu.");
     }
   };
 

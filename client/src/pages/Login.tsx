@@ -1,3 +1,4 @@
+import toast from "react-hot-toast";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import Logo from "../components/Logo";
@@ -29,11 +30,11 @@ const Login = () => {
         window.location.reload();
       }
       else{
-        alert(data.error || "Giriş başarısız! E-posta veya şifre hatalı.");
+        toast.error(data.error || "Giriş başarısız! E-posta veya şifre hatalı.");
       }
     }catch(error){
       console.log("Hata:",error);
-      alert("Sunucuyla bağlantı kurulamadı.");
+      toast.error("Sunucuyla bağlantı kurulamadı.");
     }
   }
 

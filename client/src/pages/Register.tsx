@@ -1,3 +1,4 @@
+import toast from "react-hot-toast";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 // 👇 1. ADIM: Mavi Logoyu buradan çağırıyoruz
@@ -28,17 +29,17 @@ const Register = () => {
         localStorage.setItem("token",data.token);
         localStorage.setItem("user",JSON.stringify(data.user));
 
-        alert("Kayıt Başarılı.");
+        toast.success("Kayıt Başarılı.");
         navigate("/dashboard");
 
         window.location.reload();
       }
       else{
-        alert(data.error || "Kayıt başarısız oldu.");
+        toast.error(data.error || "Kayıt başarısız oldu.");
       }
     } catch (error) {
       console.error("Hata:", error);
-      alert("Sunucuyla bağlantı kurulamadı.");
+      toast.error("Sunucuyla bağlantı kurulamadı.");
     }
   };
 

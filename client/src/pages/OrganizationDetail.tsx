@@ -1,3 +1,4 @@
+import toast from "react-hot-toast";
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useTheme } from "../context/ThemeContext";
@@ -18,7 +19,6 @@ import {
 
 // DocumentsTab bileşenini proje yapınıza göre doğru yoldan import edin
 import DocumentsTab from "./Documentstab";   // 👈 Dosyanın yolu değişebilir
-
 const getUserIdFromToken = () => {
   const token = localStorage.getItem("token");
   if (!token) return null;
@@ -108,84 +108,115 @@ const OrganizationDetail = () => {
       const data = await res.json();
 
       if (res.ok) {
-        alert("Davet başarıyla gönderildi!");
+        toast.success("Davet başarıyla gönderildi!");
         setIsInviteModalOpen(false);
         setInviteEmail("");
       } else {
-        alert(data.error || "Davet gönderilemedi.");
+        toast.error(data.error || "Davet gönderilemedi.");
       }
     } catch (error) {
-      alert("Sunucu bağlantı hatası.");
+      toast.error("Sunucu bağlantı hatası.");
     } finally {
       setIsInviting(false);
     }
   };
 
-  const handleDeleteMember = async (memberId: string) => {
-    if (!window.confirm("Üyeyi çıkarmak istediğinize emin misiniz?")) return;
-    const token = localStorage.getItem("token");
-    try {
-      const res = await fetch(`http://localhost:5000/api/organizations/${orgId}/delete-member`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
-        body: JSON.stringify({ memberId })
-      });
-      if (res.ok) fetchMembers();
-    } catch (error) { console.error(error); }
-  };
+const handleDeleteMember = async (memberId: string) => {
+  const token = localStorage.getItem("token");
+
+  try {
+    const res = await fetch(`http://localhost:5000/api/organizations/${orgId}/delete-member`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${token}`
+      },
+      body: JSON.stringify({ memberId })
+    });
+
+    if (res.ok) {
+      toast.success("Üye ekipten çıkarıldı.");
+      fetchMembers();
+    } else {
+      toast.error("Üye çıkarılamadı.");
+    }
+
+  } catch (error) {
+    toast.error("Sunucu bağlantı hatası.");
+  }
+};
 
   const handleLeaveTeam = async () => {
-    if (!window.confirm("Ekipten ayrılmak istiyor musunuz?")) return;
-    const token = localStorage.getItem("token");
+  const token = localStorage.getItem("token");
     try {
       const res = await fetch(`http://localhost:5000/api/organizations/${orgId}/leave`, {
         method: "POST",
         headers: { "Authorization": `Bearer ${token}` }
       });
-      if (res.ok) navigate("/team");
-    } catch (error) { console.error(error); }
+    if (res.ok) {
+    toast.success("Ekipten ayrıldınız.");
+    navigate("/team");
+}    } catch (error) {
+  toast.error("Ekipten ayrılırken hata oluştu.");
+}
   };
 
   const handleDeleteProject = async (projectId: string) => {
-    if (!window.confirm("Projeyi silmek istediğinize emin misiniz?")) return;
-    const token = localStorage.getItem("token");
-    try {
-      const res = await fetch(`http://localhost:5000/api/project/${projectId}`, {
-        method: "DELETE",
-        headers: { "Authorization": `Bearer ${token}` }
-      });
-      if (res.ok) {
-        setProjects((prev) => prev.filter((p) => p.id !== projectId));
-      }
-    } catch (error) { console.error(error); }
-  };
+  const token = localStorage.getItem("token");
 
-  const handleDeleteTeam = async () => {
+  try {
+    const res = await fetch(`http://localhost:5000/api/project/${projectId}`, {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
 
-    console.log("Silinecek orgId:", orgId);
+    if (res.ok) {
+      toast.success("Proje silindi.");
+      setProjects((prev) => prev.filter((p) => p.id !== projectId));
+    } else {
+      toast.error("Proje silinemedi.");
+    }
+  } catch (error) {
+    toast.error("Sunucu bağlantı hatası.");
+  }
+};
+const handleDeleteTeam = async () => {
+  if (!window.confirm("Bu ekibi tamamen kapatmak istediğinize emin misiniz?")) {
+    return;
+  }
+
+  console.log("Silinecek orgId:", orgId);
   console.log("localStorage orgProjects:", localStorage.getItem("orgProjects"));
 
+  const token = localStorage.getItem("token");
 
-    if (!window.confirm("Bu ekibi tamamen kapatmak istediğinize emin misiniz?")) return;
-    const token = localStorage.getItem("token");
-    try {
-      const res = await fetch(`http://localhost:5000/api/organizations/${orgId}`, {
-        method: "DELETE",
-        headers: { "Authorization": `Bearer ${token}` }
-      });
-      if (res.ok) {
-        // localStorage'dan bu org'u kaldır → Raporlar listesi otomatik güncellenir
-        const existing = JSON.parse(localStorage.getItem("orgProjects") || "{}");
-        delete existing[orgId!];
-        localStorage.setItem("orgProjects", JSON.stringify(existing));
+  try {
+    const res = await fetch(`http://localhost:5000/api/organizations/${orgId}`, {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
 
-        // Sidebar ve Raporlar listesini güncelle
-        window.dispatchEvent(new CustomEvent("teams-updated"));
+    if (res.ok) {
+      toast.success("Ekip kapatıldı.");
 
-        navigate("/team");
-      }
-    } catch (error) { console.error(error); }
-  };
+      const existing = JSON.parse(localStorage.getItem("orgProjects") || "{}");
+      delete existing[orgId!];
+      localStorage.setItem("orgProjects", JSON.stringify(existing));
+
+      window.dispatchEvent(new CustomEvent("teams-updated"));
+
+      navigate("/team");
+    } else {
+      toast.error("Ekip kapatılamadı.");
+    }
+  } catch (error) {
+    toast.error("Sunucu bağlantı hatası.");
+  }
+};
 
   const handleProjectClick = (project: any) => {
     const isOwner = project.ownerId === currentUserId;
@@ -194,7 +225,7 @@ const OrganizationDetail = () => {
     if (isOwner || isMember) {
       navigate(`/projects/${project.id}`);
     } else {
-      alert("Bu projenin panosuna erişim yetkiniz yok.");
+      toast.error("Bu projenin panosuna erişim yetkiniz yok.");
     }
   };
 
@@ -230,9 +261,12 @@ const OrganizationDetail = () => {
             <LogOut size={18} /> Ekipten Ayrıl
           </button>
 
-          <button onClick={handleDeleteTeam} className="bg-red-500/10 text-red-500 px-5 py-2.5 rounded-xl font-bold flex items-center gap-2 hover:bg-red-500 hover:text-white transition-all">
-            <Trash2 size={18} /> Ekibi Kapat
-          </button>
+         <button
+         onClick={handleDeleteTeam}
+          className="bg-red-500/10 text-red-500 px-5 py-2.5 rounded-xl font-bold flex items-center gap-2 hover:bg-red-500 hover:text-white transition-all"
+        >
+        <Trash2 size={18} /> Ekibi Kapat
+         </button>
 
           <button onClick={() => setIsInviteModalOpen(true)} className="bg-blue-600 text-white px-5 py-2.5 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-blue-500/20 active:scale-95">
             <UserPlus size={18} /> Üye Davet Et
@@ -319,12 +353,16 @@ const OrganizationDetail = () => {
                 </div>
               );
             })}
+
+
+
           </div>
         ) : (
           // 👇 Belgeler sekmesi – DocumentsTab bileşeni render ediliyor
-          <DocumentsTab orgId={orgId} darkMode={darkMode} />
-        )}
+           <DocumentsTab orgId={orgId!} />
+                 )}
       </div>
+
     </div>
   );
 };

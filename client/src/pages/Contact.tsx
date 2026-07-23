@@ -1,3 +1,4 @@
+import toast from "react-hot-toast";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useTheme } from "../context/ThemeContext";
@@ -24,8 +25,14 @@ const Contact = () => {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     // Buraya ileride backend bağlantısı yapılacak
-    alert(`Mesajınız alındı Sayın ${formData.name}! En kısa sürede döneceğiz.`);
-    setFormData({ name: "", email: "", subject: "", message: "" });
+  toast.success(`Mesajınız alındı Sayın ${formData.name}! En kısa sürede döneceğiz.`); 
+  setFormData({
+  name: "",
+  email: "",
+  subject: "",
+  message: "",
+  contactType: "genel"
+});
   };
 
   return (

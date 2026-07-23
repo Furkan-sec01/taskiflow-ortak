@@ -1,3 +1,5 @@
+import { Toaster } from "react-hot-toast";
+
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import { BrowserRouter, Routes, Route } from "react-router-dom";
@@ -86,7 +88,7 @@ import SecurityPage from "./pages/Securitypage";
 
 import BillingPage from "./pages/Billingpage";
 
-import TemplatesPage from "./pages/Templatespage.tsx"
+import TemplatesPage from "./pages/TemplatesPage.tsx"
 
 import DocumentsPage from "./pages/Documentspage";
 
@@ -124,9 +126,18 @@ const App = () => (
 
         <ThemeProvider>
 
-            <BrowserRouter>
+    <BrowserRouter>
 
-                <Routes>
+    <Toaster
+        position="top-right"
+        toastOptions={{
+            duration: 3000,
+        }}
+    />
+
+    <Routes>
+
+                
 
 
 

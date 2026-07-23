@@ -1,3 +1,4 @@
+import toast from "react-hot-toast";
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -73,7 +74,7 @@ const TemplatesPage: React.FC = () => {
 
  const handleSelectTemplate = async (template: Template) => {
     const token = localStorage.getItem("token");
-    if (!token) return alert("Lütfen giriş yapın.");
+    if (!token) return toast.error("Lütfen giriş yapın.");
 
     try {
       setLoadingId(template.id);
@@ -85,7 +86,7 @@ const TemplatesPage: React.FC = () => {
       const orgs = await orgsRes.json();
 
       if (!Array.isArray(orgs) || orgs.length === 0) {
-        alert("Şablon uygulamadan önce bir ekip/organizasyon oluşturmalısınız.");
+        toast.error("Şablon uygulamadan önce bir ekip/organizasyon oluşturmalısınız.");
         setLoadingId(null);
         return;
       }
@@ -114,7 +115,7 @@ const TemplatesPage: React.FC = () => {
       if (response.ok && data.project?.id) {
         navigate(`/projects/${data.project.id}`);
       } else {
-        alert(data.error || "Şablon oluşturulamadı.");
+        toast.error(data.error || "Şablon oluşturulamadı.");
       }
     } catch (err) {
       console.error("Template Error:", err);

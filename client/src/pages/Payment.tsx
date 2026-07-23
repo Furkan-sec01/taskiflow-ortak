@@ -1,3 +1,4 @@
+import toast from "react-hot-toast";
 import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams, Link } from "react-router-dom";
 import { useTheme } from "../context/ThemeContext";
@@ -123,7 +124,7 @@ const Payment = () => {
       navigate(`/payment-success?plan=${encodeURIComponent(planName)}&price=${price}`);
     } catch (error) {
       console.error("Ödeme hatası:", error);
-      alert("Ödeme işlemi sırasında bir hata oluştu. Lütfen tekrar deneyin.");
+      toast.error("Ödeme işlemi sırasında bir hata oluştu. Lütfen tekrar deneyin.");
     } finally {
       setIsProcessing(false);
     }

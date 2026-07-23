@@ -1,3 +1,4 @@
+import toast from "react-hot-toast";
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTheme } from "../context/ThemeContext"; 
@@ -98,10 +99,10 @@ const Tasks = () => {
         setNewTask({ title: "", date: "", time: "", priority: "MEDIUM" }); 
       } else {
         const err = await res.json();
-        alert("Sunucu hatası: " + JSON.stringify(err));
+        toast.error(err.error || "Sunucu hatası");
       }
     } catch (error) { 
-      alert("Hata oluştu."); 
+      toast.error("Hata oluştu."); 
     } finally { 
       setIsLoading(false); 
     }

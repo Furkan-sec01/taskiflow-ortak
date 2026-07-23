@@ -1,3 +1,4 @@
+import toast from "react-hot-toast";
 import { useState, useEffect, useRef } from "react";
 import {
   FileText,
@@ -171,7 +172,7 @@ export default function DocumentsPage() {
       if (!res.ok) throw new Error(data.error || "İşlem başarısız oldu.");
       setDocs((prev) => prev.map((d) => (d.id === id ? data : d)));
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Bir hata oluştu.");
+      toast.error(err instanceof Error ? err.message : "Bir hata oluştu.");
     }
   };
 
@@ -187,7 +188,7 @@ export default function DocumentsPage() {
       if (!res.ok) throw new Error(data.error || "Belge silinemedi.");
       setDocs((prev) => prev.filter((d) => d.id !== id));
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Bir hata oluştu.");
+      toast.error(err instanceof Error ? err.message : "Bir hata oluştu.");
     }
   };
 
@@ -211,7 +212,7 @@ export default function DocumentsPage() {
       if (!res.ok) throw new Error(data.error || "Yeniden adlandırılamadı.");
       setDocs((prev) => prev.map((d) => (d.id === id ? data : d)));
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Bir hata oluştu.");
+      toast.error(err instanceof Error ? err.message : "Bir hata oluştu.");
     } finally {
       setEditingId(null);
     }

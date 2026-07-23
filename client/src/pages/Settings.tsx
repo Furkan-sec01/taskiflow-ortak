@@ -1,3 +1,4 @@
+import toast from "react-hot-toast";
 import { useState, useEffect } from "react";
 import { useTheme } from "../context/ThemeContext";
 import { Moon, Sun, Save, User, CheckCircle } from "lucide-react";
@@ -63,10 +64,10 @@ const SettingsPage = () => {
         setShowSuccess(true);
         setTimeout(() => setShowSuccess(false), 3000);
       } else {
-        alert(data.error || "Güncelleme başarısız.");
+        toast.error(data.error || "Güncelleme başarısız.");
       }
     } catch (error) {
-      alert("Sunucu hatası.");
+      toast.error("Sunucu hatası");
     } finally {
       setIsLoading(false);
     }

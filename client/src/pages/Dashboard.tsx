@@ -1,3 +1,4 @@
+import toast from "react-hot-toast";
 import { useState, useEffect } from "react";
 
 import { Link, useNavigate } from "react-router-dom";
@@ -162,7 +163,7 @@ const Dashboard = () => {
 
     if (!newProject.title || !newProject.organizationId) {
 
-      alert("Lütfen tüm alanları doldurun ve bir çalışma alanı seçin.");
+      toast.error("Lütfen tüm alanları doldurun ve bir çalışma alanı seçin.");
 
       return;
 
@@ -206,13 +207,13 @@ const Dashboard = () => {
 
         const data = await res.json();
 
-        alert(data.error || "Proje oluşturulamadı.");
+        toast.error(data.error || "Proje oluşturulamadı.");
 
       }
 
     } catch (error) {
 
-      alert("İşlem sırasında bir hata oluştu.");
+      toast.error("İşlem sırasında bir hata oluştu.");
 
     } finally {
 

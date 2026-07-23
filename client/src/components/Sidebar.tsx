@@ -1,3 +1,4 @@
+import toast from "react-hot-toast";
 import { useState, useEffect } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import {
@@ -245,10 +246,10 @@ useEffect(() => {
         setTeams(prev => [...prev, { id: realOrgId, name: trimmed }]);
         window.dispatchEvent(new CustomEvent("teams-updated"));
       } else {
-        alert(data.error || "Ekip oluşturulamadı.");
+        toast.error(data.error || "Ekip oluşturulamadı.");
       }
     } catch (error) {
-      alert("Sunucu bağlantı hatası.");
+      toast.error("Sunucu bağlantı hatası.");
     }
 
     setNewTeamName("");

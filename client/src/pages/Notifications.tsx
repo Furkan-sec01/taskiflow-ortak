@@ -1,3 +1,4 @@
+import toast from "react-hot-toast";
 import { useState, useEffect } from "react";
 import { Bell, CheckCircle, AlertTriangle, Info, Trash2, CheckCheck, Filter } from "lucide-react";
 
@@ -86,7 +87,7 @@ const deleteNotification = async (id: string) => {
       console.error("Silme hatası:", error);
       // Sunucuda silinemezse eski listeyi geri yüklüyoruz
       setNotifications(previousNotifications);
-      alert("Bildirim silinemedi, lütfen tekrar deneyin.");
+      toast.error("Bildirim silinemedi, lütfen tekrar deneyin.");
     }
   };
 

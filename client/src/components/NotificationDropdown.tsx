@@ -1,3 +1,4 @@
+import toast from "react-hot-toast";
 import { useState, useEffect } from "react";
 import { Bell, Check, X, Info, Sparkles, CheckCheck } from "lucide-react"; // CheckCheck ikonu eklendi
 
@@ -72,36 +73,39 @@ const NotificationDropdown = () => {
 
   // Davet Yanıtlama (Kabul/Reddet)
   const handleAction = async (notificationId: string, action: "ACCEPT" | "REJECT") => {
-    setLoading(true);
-    try {
-      const res = await fetch("http://localhost:5000/api/notifications/respond-invite", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`
-        },
-        body: JSON.stringify({ notificationId, action })
-      });
+  setLoading(true);
 
-      const data = await res.json();
+  try {
+    const res = await fetch("http://localhost:5000/api/notifications/respond-invite", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${token}`
+      },
+      body: JSON.stringify({ notificationId, action })
+    });
 
-     if (res.ok) {
-  setNotifications(prev => prev.filter(n => n.id !== notificationId));
+    const data = await res.json();
 
-  if (action === "ACCEPT") {
-    alert(data.message || "Başarıyla ekibe katıldınız!");
-    window.location.reload();
-  } else {
-    alert(data.message || "İşlem tamamlandı.");
-  }
-}
-    } catch (error) {
-      console.error("İşlem hatası:", error);
-      alert("Sunucuya bağlanılamadı.");
-    } finally {
-      setLoading(false);
+    if (res.ok) {
+      setNotifications(prev => prev.filter(n => n.id !== notificationId));
+
+      if (action === "ACCEPT") {
+        toast.success("Başarıyla ekibe katıldınız!");
+        window.location.reload();
+      } else {
+        toast("İşlem tamamlandı.");
+      }
     }
-  };
+
+  } catch (error) {
+    console.error("İşlem hatası:", error);
+    toast.error("Sunucuya bağlanılamadı.");
+
+  } finally {
+    setLoading(false);
+  }
+};
 
   return (
     <div className="relative z-[1000] translate-x-3">

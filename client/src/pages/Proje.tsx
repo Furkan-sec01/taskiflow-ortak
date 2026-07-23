@@ -1,3 +1,4 @@
+import toast from "react-hot-toast";
 import React, { useState, useRef, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useTheme } from "../context/ThemeContext";
@@ -166,7 +167,7 @@ const Proje: React.FC = () => {
       
       else {
         const data = await res.json();
-        alert(data.error);
+        toast.error(data.error);
       }
     } catch (error) { console.error("Sayaç hatası:", error); }
   };
@@ -219,15 +220,15 @@ const Proje: React.FC = () => {
       if (res.ok) { fetchBoard(); setIsColModalOpen(false); setNewColTitle(""); }
       else{
         const data = await res.json();
-        alert(data.error);
+        toast.error(data.error);
       }
-    } catch (error) { alert("Sütun eklenemedi."); }
+    } catch (error) { toast.error("Sütun eklenemedi."); }
   };
 
   //görev oluşturma
   const handleSaveTask = async () => {
     if (!newTask.title || !activeColId || !newTask.assigneeMail) {
-      alert("Lütfen başlık ve ekip üyesi seçtiğinizden emin olun.");
+      toast.error("Lütfen başlık ve ekip üyesi seçtiğinizden emin olun.");
       return;
     }
     const token = localStorage.getItem("token");
@@ -246,9 +247,9 @@ const Proje: React.FC = () => {
       if (res.ok) { fetchBoard(); closeTaskModal(); }
       else{
         const data = await res.json();
-        alert(data.error);
+        toast.error(data.error);
       }
-    } catch (error) { alert("Görev hatası."); }
+    } catch (error) { toast.error("Görev hatası."); }
   };
 
   //sütun silme
@@ -265,7 +266,7 @@ const Proje: React.FC = () => {
       }
       else{
         const data = await res.json();
-        alert(data.error);
+        toast.error(data.error);
       }
     } catch (error) { }
   };
@@ -285,7 +286,7 @@ const Proje: React.FC = () => {
       }
       else{
         const data = await res.json();
-        alert(data.error);
+        toast.error(data.error);
       }
     } catch (error) { }
   };
@@ -309,7 +310,7 @@ const Proje: React.FC = () => {
   const handleInviteToProject = async (e: React.FormEvent) => {
     e.preventDefault();
     if(!selectedMemberToInvite){
-      alert("Lütfen davet edilecek bir üye seçin.");
+      toast.error("Lütfen davet edilecek bir üye seçin.");
       return;
     }
 
@@ -329,18 +330,18 @@ const Proje: React.FC = () => {
       const data = await res.json();
 
       if (res.ok){
-        alert("Üye projeye eklendi.");
+        toast.success("Üye projeye eklendi.");
         setIsInviteProjectModalOpen(false);
         setSelectedMemberToInvite("");
         fetchBoard();
       }
       else{
-        alert(data.error || "Davet Başarısız.");
+        toast.error(data.error || "Davet Başarısız.");
       }
 
     }catch(error){
       console.log("Davet Hatası: ",error);
-      alert("Sunucu Hatası");
+      toast.error("Sunucu hatası");
     } finally{
       setIsInviting(false);
     }

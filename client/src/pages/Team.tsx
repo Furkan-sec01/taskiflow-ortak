@@ -1,3 +1,4 @@
+import toast from "react-hot-toast";
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTheme } from "../context/ThemeContext";
@@ -94,7 +95,7 @@ const Team = () => {
       }
 
     } catch (err) {
-      alert("Sunucu hatası oluştu.");
+      toast.error("Sunucu hatası oluştu.");
     } finally {
       setIsSubmitting(false);
     }
