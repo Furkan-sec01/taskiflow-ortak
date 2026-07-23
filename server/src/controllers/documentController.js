@@ -11,6 +11,15 @@ async function checkMembership(userId, orgId) {
   return !!membership;
 }
 
+
+async function canAccessDocument(userId, doc) {
+  if (!doc) return false;
+  if (doc.orgId) {
+    return checkMembership(userId, doc.orgId);
+  }
+  return doc.uploaderId === userId;
+}
+
 exports.getDocuments = async (req, res) => {
   const userId = req.user.id || req.user.userId;
   const { orgId } = req.params;
@@ -63,13 +72,57 @@ exports.uploadDocument = async (req, res) => {
   }
 };
 
+// Kişisel Belgeler
+
+exports.getPersonalDocuments = async (req, res) => {
+  const userId = req.user.id || req.user.userId;
+
+  try {
+    const documents = await prisma.document.findMany({
+      where: { uploaderId: userId, orgId: null },
+      orderBy: { updatedAt: "desc" },
+    });
+
+    res.json(documents);
+  } catch (error) {
+    console.error("getPersonalDocuments Hatası:", error);
+    res.status(500).json({ error: "Belgeler yüklenemedi." });
+  }
+};
+
+exports.uploadPersonalDocument = async (req, res) => {
+  const userId = req.user.id || req.user.userId;
+
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: "Dosya bulunamadı." });
+    }
+
+    const document = await prisma.document.create({
+      data: {
+        name: req.file.originalname,
+        type: detectType(req.file.mimetype),
+        size: req.file.size,
+        filePath: `/uploads/documents/${req.file.filename}`,
+        orgId: null,
+        uploaderId: userId,
+      },
+    });
+
+    res.status(201).json({ message: "Belge yüklendi.", document });
+  } catch (error) {
+    console.error("uploadPersonalDocument Hatası:", error);
+    res.status(500).json({ error: "Belge yüklenemedi." });
+  }
+};
+
 exports.toggleStar = async (req, res) => {
   const userId = req.user.id || req.user.userId;
   const { docId } = req.params;
 
   try {
     const doc = await prisma.document.findUnique({ where: { id: docId } });
-    if (!doc || !(await checkMembership(userId, doc.orgId))) {
+    if (!doc || !(await canAccessDocument(userId, doc))) {
       return res.status(404).json({ error: "Belge bulunamadı." });
     }
 
@@ -96,7 +149,7 @@ exports.renameDocument = async (req, res) => {
 
   try {
     const doc = await prisma.document.findUnique({ where: { id: docId } });
-    if (!doc || !(await checkMembership(userId, doc.orgId))) {
+    if (!doc || !(await canAccessDocument(userId, doc))) {
       return res.status(404).json({ error: "Belge bulunamadı." });
     }
 
@@ -118,7 +171,7 @@ exports.deleteDocument = async (req, res) => {
 
   try {
     const doc = await prisma.document.findUnique({ where: { id: docId } });
-    if (!doc || !(await checkMembership(userId, doc.orgId))) {
+    if (!doc || !(await canAccessDocument(userId, doc))) {
       return res.status(404).json({ error: "Belge bulunamadı." });
     }
 

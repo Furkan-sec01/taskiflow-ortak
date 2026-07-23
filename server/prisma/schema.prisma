@@ -200,8 +200,8 @@ model Document {
   size       Int
   filePath   String
   starred    Boolean      @default(false)
-  orgId      String
-  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  orgId      String?
+  organization Organization? @relation(fields: [orgId], references: [id], onDelete: Cascade)
   uploaderId String
   uploader   User         @relation(fields: [uploaderId], references: [id])
   createdAt  DateTime     @default(now())

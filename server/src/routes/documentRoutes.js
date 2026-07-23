@@ -6,6 +6,9 @@ const { uploadDocument } = require("../middleware/documentUpload");
 
 router.use(authenticateToken);
 
+router.get("/personal/me", documentController.getPersonalDocuments);
+router.post("/personal/me", uploadDocument.single("file"), documentController.uploadPersonalDocument);
+
 router.get("/:orgId", documentController.getDocuments);
 router.post("/:orgId", uploadDocument.single("file"), documentController.uploadDocument);
 router.patch("/:docId/star", documentController.toggleStar);

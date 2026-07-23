@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   FileText,
   FilePlus,
@@ -8,14 +8,11 @@ import {
   Trash2,
   Edit3,
   Eye,
-  Filter,
   Grid3X3,
   List,
   Star,
   StarOff,
   Clock,
-  Tag,
-  ChevronDown,
   File,
   FileSpreadsheet,
   Presentation,
@@ -27,75 +24,19 @@ import {
 type ViewMode = "grid" | "list";
 type FilterType = "all" | "starred" | "recent";
 
-interface Document {
-  id: number;
+const API_BASE = "http://localhost:5000";
+
+export interface PersonalDocument {
+  id: string;
   name: string;
   type: "pdf" | "doc" | "sheet" | "slide" | "image";
-  size: string;
-  updatedAt: string;
+  size: number;
+  filePath: string;
   starred: boolean;
-  tags: string[];
-  preview?: string;
+  updatedAt: string;
 }
 
-const mockDocuments: Document[] = [
-  {
-    id: 1,
-    name: "Q1 2024 Report",
-    type: "pdf",
-    size: "2.4 MB",
-    updatedAt: "2 saat önce",
-    starred: true,
-    tags: ["rapor", "finans"],
-  },
-  {
-    id: 2,
-    name: "Proje Planı",
-    type: "sheet",
-    size: "1.1 MB",
-    updatedAt: "Dün",
-    starred: false,
-    tags: ["proje"],
-  },
-  {
-    id: 3,
-    name: "Sunum Taslağı",
-    type: "slide",
-    size: "5.8 MB",
-    updatedAt: "3 gün önce",
-    starred: true,
-    tags: ["sunum"],
-  },
-  {
-    id: 4,
-    name: "Sözleşme v2",
-    type: "doc",
-    size: "340 KB",
-    updatedAt: "1 hafta önce",
-    starred: false,
-    tags: ["hukuk"],
-  },
-  {
-    id: 5,
-    name: "Logo Görselleri",
-    type: "image",
-    size: "8.2 MB",
-    updatedAt: "2 hafta önce",
-    starred: false,
-    tags: ["tasarım"],
-  },
-  {
-    id: 6,
-    name: "Bütçe Tablosu",
-    type: "sheet",
-    size: "920 KB",
-    updatedAt: "3 hafta önce",
-    starred: true,
-    tags: ["finans", "bütçe"],
-  },
-];
-
-const fileIcons: Record<Document["type"], { icon: React.ElementType; color: string; bg: string }> = {
+const fileIcons: Record<PersonalDocument["type"], { icon: React.ElementType; color: string; bg: string }> = {
   pdf: { icon: FileText, color: "#ef4444", bg: "#fef2f2" },
   doc: { icon: File, color: "#3b82f6", bg: "#eff6ff" },
   sheet: { icon: FileSpreadsheet, color: "#22c55e", bg: "#f0fdf4" },
@@ -103,7 +44,7 @@ const fileIcons: Record<Document["type"], { icon: React.ElementType; color: stri
   image: { icon: Image, color: "#a855f7", bg: "#faf5ff" },
 };
 
-const fileTypeLabels: Record<Document["type"], string> = {
+const fileTypeLabels: Record<PersonalDocument["type"], string> = {
   pdf: "PDF",
   doc: "Word",
   sheet: "Excel",
@@ -111,44 +52,208 @@ const fileTypeLabels: Record<Document["type"], string> = {
   image: "Görsel",
 };
 
+function formatSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function formatTimeAgo(dateString: string): string {
+  const now = new Date();
+  const date = new Date(dateString);
+  const diff = now.getTime() - date.getTime();
+  const minutes = Math.floor(diff / 60000);
+
+  if (minutes < 1) return "Az önce";
+  if (minutes < 60) return `${minutes} dakika önce`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} saat önce`;
+  const days = Math.floor(hours / 24);
+  if (days === 1) return "Dün";
+  if (days < 7) return `${days} gün önce`;
+  const weeks = Math.floor(days / 7);
+  if (weeks < 4) return `${weeks} hafta önce`;
+  return `${Math.floor(days / 30)} ay önce`;
+}
+
 export default function DocumentsPage() {
+  const [docs, setDocs] = useState<PersonalDocument[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [uploading, setUploading] = useState(false);
+
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<FilterType>("all");
-  const [docs, setDocs] = useState<Document[]>(mockDocuments);
-  const [activeMenu, setActiveMenu] = useState<number | null>(null);
+  const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState("");
 
-  const toggleStar = (id: number) => {
-    setDocs((prev) =>
-      prev.map((d) => (d.id === id ? { ...d, starred: !d.starred } : d))
-    );
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const fetchDocs = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${API_BASE}/api/documents/personal/me`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Belgeler yüklenemedi.");
+      setDocs(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Bir hata oluştu.");
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const deleteDoc = (id: number) => {
-    setDocs((prev) => prev.filter((d) => d.id !== id));
+  useEffect(() => {
+    fetchDocs();
+  }, []);
+
+  const uploadFiles = async (files: FileList | File[]) => {
+    const token = localStorage.getItem("token");
+    setUploading(true);
+    setError("");
+
+    for (const file of Array.from(files)) {
+      try {
+        const formData = new FormData();
+        formData.append("file", file);
+
+        const res = await fetch(`${API_BASE}/api/documents/personal/me`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+          body: formData,
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          throw new Error(data.error || `${file.name} yüklenemedi.`);
+        }
+
+        setDocs((prev) => [data.document, ...prev]);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Yükleme sırasında bir hata oluştu.");
+      }
+    }
+
+    setUploading(false);
+  };
+
+  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      uploadFiles(e.target.files);
+    }
+    e.target.value = "";
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragging(false);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      uploadFiles(e.dataTransfer.files);
+    }
+  };
+
+  const toggleStar = async (id: string) => {
+    const token = localStorage.getItem("token");
+    try {
+      const res = await fetch(`${API_BASE}/api/documents/${id}/star`, {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "İşlem başarısız oldu.");
+      setDocs((prev) => prev.map((d) => (d.id === id ? data : d)));
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Bir hata oluştu.");
+    }
+  };
+
+  const deleteDoc = async (id: string) => {
+    const token = localStorage.getItem("token");
     setActiveMenu(null);
+    try {
+      const res = await fetch(`${API_BASE}/api/documents/${id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Belge silinemedi.");
+      setDocs((prev) => prev.filter((d) => d.id !== id));
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Bir hata oluştu.");
+    }
+  };
+
+  const confirmRename = async (id: string) => {
+    if (!editingName.trim()) {
+      setEditingId(null);
+      return;
+    }
+
+    const token = localStorage.getItem("token");
+    try {
+      const res = await fetch(`${API_BASE}/api/documents/${id}/rename`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ name: editingName.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Yeniden adlandırılamadı.");
+      setDocs((prev) => prev.map((d) => (d.id === id ? data : d)));
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Bir hata oluştu.");
+    } finally {
+      setEditingId(null);
+    }
+  };
+
+  const handleDownload = (doc: PersonalDocument) => {
+    window.open(`${API_BASE}${doc.filePath}`, "_blank");
   };
 
   const filtered = docs.filter((d) => {
     const matchSearch = d.name.toLowerCase().includes(search.toLowerCase());
     if (filter === "starred") return matchSearch && d.starred;
-    if (filter === "recent")
-      return matchSearch && ["saat", "Dün"].some((k) => d.updatedAt.includes(k));
+    if (filter === "recent") {
+      const hoursAgo = (Date.now() - new Date(d.updatedAt).getTime()) / 3600000;
+      return matchSearch && hoursAgo < 48;
+    }
     return matchSearch;
   });
 
   return (
     <div className="min-h-screen bg-[#f0f4f8] dark:bg-gray-900 font-sans">
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={handleFileInputChange}
+        multiple
+        className="hidden"
+      />
+
       {/* Header */}
       <div className="bg-white dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700 px-8 py-5 flex items-center justify-between">
         <div>
           <h1 className="text-xl font-semibold text-gray-900 dark:text-gray-100 tracking-tight">Belgeler</h1>
           <p className="text-sm text-gray-400 dark:text-gray-500 mt-0.5">{docs.length} belge</p>
         </div>
-        <button className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          disabled={uploading}
+          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+        >
           <FilePlus size={16} />
-          Yeni Belge
+          {uploading ? "Yükleniyor..." : "Yeni Belge"}
         </button>
       </div>
 
@@ -192,7 +297,7 @@ export default function DocumentsPage() {
                 viewMode === "grid" ? "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300" : "text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-400"
               }`}
             >
-              <Grid3X3 size={15} />
+              <Grid3X3 size={14} />
             </button>
             <button
               onClick={() => setViewMode("list")}
@@ -200,16 +305,21 @@ export default function DocumentsPage() {
                 viewMode === "list" ? "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300" : "text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-400"
               }`}
             >
-              <List size={15} />
+              <List size={14} />
             </button>
           </div>
         </div>
 
-        {/* Upload Drop Zone */}
+        {error && (
+          <p className="text-xs text-red-600 dark:text-red-400 mb-4">{error}</p>
+        )}
+
+        {/* Drop Zone */}
         <div
+          onClick={() => fileInputRef.current?.click()}
           onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
           onDragLeave={() => setIsDragging(false)}
-          onDrop={(e) => { e.preventDefault(); setIsDragging(false); }}
+          onDrop={handleDrop}
           className={`mb-6 border-2 border-dashed rounded-xl p-6 flex flex-col items-center gap-2 transition-all cursor-pointer ${
             isDragging
               ? "border-blue-400 bg-blue-50 dark:border-blue-500 dark:bg-blue-900/30"
@@ -221,13 +331,20 @@ export default function DocumentsPage() {
           </div>
           <p className="text-sm text-gray-600 dark:text-gray-300 font-medium">
             Dosyaları buraya sürükleyin veya{" "}
-            <span className="text-blue-600 dark:text-blue-400 hover:underline cursor-pointer">seçin</span>
+            <span className="text-blue-600 dark:text-blue-400 hover:underline">seçin</span>
           </p>
-          <p className="text-xs text-gray-400 dark:text-gray-500">PDF, Word, Excel, Sunu, Görseller desteklenir</p>
+          <p className="text-xs text-gray-400 dark:text-gray-500">PDF, Word, Excel, Sunu, Görseller desteklenir (max 20MB)</p>
         </div>
 
+        {/* Yükleniyor durumu */}
+        {loading && (
+          <div className="flex items-center justify-center py-20">
+            <p className="text-sm text-gray-400">Belgeler yükleniyor...</p>
+          </div>
+        )}
+
         {/* Empty State */}
-        {filtered.length === 0 && (
+        {!loading && filtered.length === 0 && (
           <div className="flex flex-col items-center justify-center py-20 text-center">
             <div className="w-16 h-16 rounded-2xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center mb-4">
               <FolderOpen size={28} className="text-gray-400 dark:text-gray-500" />
@@ -240,7 +357,7 @@ export default function DocumentsPage() {
         )}
 
         {/* Grid View */}
-        {viewMode === "grid" && filtered.length > 0 && (
+        {!loading && viewMode === "grid" && filtered.length > 0 && (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
             {filtered.map((doc) => {
               const { icon: Icon, color, bg } = fileIcons[doc.type];
@@ -249,7 +366,6 @@ export default function DocumentsPage() {
                   key={doc.id}
                   className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 p-4 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 group relative"
                 >
-                  {/* Top row */}
                   <div className="flex items-start justify-between mb-3">
                     <div
                       className="w-10 h-10 rounded-lg flex items-center justify-center"
@@ -277,13 +393,22 @@ export default function DocumentsPage() {
                         </button>
                         {activeMenu === doc.id && (
                           <div className="absolute right-0 top-6 z-10 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-100 dark:border-gray-700 py-1 w-36">
-                            <button className="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700">
+                            <button
+                              onClick={() => { handleDownload(doc); setActiveMenu(null); }}
+                              className="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                            >
                               <Eye size={12} /> Görüntüle
                             </button>
-                            <button className="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700">
+                            <button
+                              onClick={() => { handleDownload(doc); setActiveMenu(null); }}
+                              className="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                            >
                               <Download size={12} /> İndir
                             </button>
-                            <button className="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700">
+                            <button
+                              onClick={() => { setEditingId(doc.id); setEditingName(doc.name); setActiveMenu(null); }}
+                              className="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                            >
                               <Edit3 size={12} /> Yeniden adlandır
                             </button>
                             <hr className="my-1 border-gray-100 dark:border-gray-700" />
@@ -299,30 +424,25 @@ export default function DocumentsPage() {
                     </div>
                   </div>
 
-                  {/* Name */}
-                  <p className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate mb-1">{doc.name}</p>
+                  {editingId === doc.id ? (
+                    <input
+                      autoFocus
+                      value={editingName}
+                      onChange={(e) => setEditingName(e.target.value)}
+                      onBlur={() => confirmRename(doc.id)}
+                      onKeyDown={(e) => { if (e.key === "Enter") confirmRename(doc.id); if (e.key === "Escape") setEditingId(null); }}
+                      className="w-full text-sm font-medium border border-blue-400 rounded px-1 py-0.5 outline-none mb-1 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200"
+                    />
+                  ) : (
+                    <p className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate mb-1">{doc.name}</p>
+                  )}
                   <p className="text-xs text-gray-400 dark:text-gray-500 mb-3">
-                    {fileTypeLabels[doc.type]} · {doc.size}
+                    {fileTypeLabels[doc.type]} · {formatSize(doc.size)}
                   </p>
 
-                  {/* Tags */}
-                  {doc.tags.length > 0 && (
-                    <div className="flex flex-wrap gap-1 mb-2">
-                      {doc.tags.map((tag) => (
-                        <span
-                          key={tag}
-                          className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 rounded text-[10px]"
-                        >
-                          {tag}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Date */}
                   <div className="flex items-center gap-1 mt-auto">
                     <Clock size={10} className="text-gray-300 dark:text-gray-600" />
-                    <span className="text-[10px] text-gray-400 dark:text-gray-500">{doc.updatedAt}</span>
+                    <span className="text-[10px] text-gray-400 dark:text-gray-500">{formatTimeAgo(doc.updatedAt)}</span>
                     {doc.starred && (
                       <Star size={10} className="text-amber-400 fill-amber-400 ml-auto" />
                     )}
@@ -334,7 +454,7 @@ export default function DocumentsPage() {
         )}
 
         {/* List View */}
-        {viewMode === "list" && filtered.length > 0 && (
+        {!loading && viewMode === "list" && filtered.length > 0 && (
           <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 overflow-hidden">
             <div className="grid grid-cols-[2fr_1fr_1fr_1fr_auto] px-4 py-2.5 border-b border-gray-100 dark:border-gray-700 text-xs text-gray-400 dark:text-gray-500 font-medium">
               <span>Ad</span>
@@ -359,12 +479,23 @@ export default function DocumentsPage() {
                     >
                       <Icon size={16} style={{ color }} />
                     </div>
-                    <span className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">{doc.name}</span>
+                    {editingId === doc.id ? (
+                      <input
+                        autoFocus
+                        value={editingName}
+                        onChange={(e) => setEditingName(e.target.value)}
+                        onBlur={() => confirmRename(doc.id)}
+                        onKeyDown={(e) => { if (e.key === "Enter") confirmRename(doc.id); if (e.key === "Escape") setEditingId(null); }}
+                        className="text-sm font-medium border border-blue-400 rounded px-1 py-0.5 outline-none bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200"
+                      />
+                    ) : (
+                      <span className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">{doc.name}</span>
+                    )}
                     {doc.starred && <Star size={12} className="text-amber-400 fill-amber-400 flex-shrink-0" />}
                   </div>
                   <span className="text-xs text-gray-500 dark:text-gray-400">{fileTypeLabels[doc.type]}</span>
-                  <span className="text-xs text-gray-500 dark:text-gray-400">{doc.size}</span>
-                  <span className="text-xs text-gray-400 dark:text-gray-500">{doc.updatedAt}</span>
+                  <span className="text-xs text-gray-500 dark:text-gray-400">{formatSize(doc.size)}</span>
+                  <span className="text-xs text-gray-400 dark:text-gray-500">{formatTimeAgo(doc.updatedAt)}</span>
                   <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                     <button
                       onClick={() => toggleStar(doc.id)}
@@ -376,7 +507,16 @@ export default function DocumentsPage() {
                         <StarOff size={13} className="text-gray-400 dark:text-gray-500" />
                       )}
                     </button>
-                    <button className="p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700">
+                    <button
+                      onClick={() => { setEditingId(doc.id); setEditingName(doc.name); }}
+                      className="p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
+                    >
+                      <Edit3 size={13} className="text-gray-400 dark:text-gray-500" />
+                    </button>
+                    <button
+                      onClick={() => handleDownload(doc)}
+                      className="p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
+                    >
                       <Download size={13} className="text-gray-400 dark:text-gray-500" />
                     </button>
                     <button
@@ -393,7 +533,6 @@ export default function DocumentsPage() {
         )}
       </div>
 
-      {/* Click outside to close menu */}
       {activeMenu !== null && (
         <div
           className="fixed inset-0 z-0"
