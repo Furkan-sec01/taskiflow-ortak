@@ -71,15 +71,29 @@ const TemplatesPage: React.FC = () => {
   const navigate = useNavigate();
   const [loadingId, setLoadingId] = useState<string | null>(null);
 
-  const handleSelectTemplate = async (template: Template) => {
+ const handleSelectTemplate = async (template: Template) => {
     const token = localStorage.getItem("token");
     if (!token) return alert("Lütfen giriş yapın.");
 
     try {
       setLoadingId(template.id);
 
+      // Önce kullanıcının ekiplerini (organizasyonlarını) çekiyoruz
+      const orgsRes = await fetch("http://localhost:5000/api/organizations", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const orgs = await orgsRes.json();
+
+      if (!Array.isArray(orgs) || orgs.length === 0) {
+        alert("Şablon uygulamadan önce bir ekip/organizasyon oluşturmalısınız.");
+        setLoadingId(null);
+        return;
+      }
+
+      const organizationId = orgs[0].id;
+
       const response = await fetch(
-        "http://localhost:5000/api/project/create",
+        "http://localhost:5000/api/project",
         {
           method: "POST",
           headers: {
@@ -89,8 +103,8 @@ const TemplatesPage: React.FC = () => {
           body: JSON.stringify({
             title: `${template.title} Projem`,
             description: template.description,
+            organizationId: organizationId,
             initialColumns: template.columns,
-            design: template.design,
           }),
         }
       );

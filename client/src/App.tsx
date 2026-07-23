@@ -208,7 +208,7 @@ const App = () => (
 
                         <Route path="/test-projelerim" element={<Projelerim />} />
 
-                        <Route path="/settings/connections" element={<Connected userId={""} />} />
+                        <Route path="/settings/connections" element={<Connected />} />
 
                         <Route path="/settings/import" element={<Export />} />
 

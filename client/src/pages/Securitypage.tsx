@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Lock, Shield, Monitor, Smartphone, AlertTriangle, Eye, EyeOff } from "lucide-react";
 
 interface ToggleProps {
@@ -73,14 +73,118 @@ function getStrength(val: string): { score: number; label: string; color: string
   return { score, ...map[score] };
 }
 
+type SessionItem = {
+  id: string;
+  deviceName: string;
+  deviceType: string;
+  lastActive: string;
+  current: boolean;
+};
+
 export default function SecurityPage() {
   const [curPass, setCurPass] = useState("");
   const [newPass, setNewPass] = useState("");
   const [confPass, setConfPass] = useState("");
 
+  const [pwSaving, setPwSaving] = useState(false);
+  const [pwError, setPwError] = useState("");
+  const [pwSuccess, setPwSuccess] = useState("");
+
   const [twoFA, setTwoFA] = useState({ auth: false, sms: true, email: true });
 
+  const [sessions, setSessions] = useState<SessionItem[]>([]);
+  const [userEmail, setUserEmail] = useState("");
+
   const strength = getStrength(newPass);
+
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+
+    fetch("http://localhost:5000/api/sessions", {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((res) => res.json())
+      .then((data) => setSessions(Array.isArray(data) ? data : []))
+      .catch(() => setSessions([]));
+
+    fetch("http://localhost:5000/api/users/me", {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((res) => res.json())
+      .then((data) => setUserEmail(data.email || ""))
+      .catch(() => setUserEmail(""));
+  }, []);
+
+  const handleChangePassword = async () => {
+    setPwError("");
+    setPwSuccess("");
+
+    if (!curPass || !newPass || !confPass) {
+      setPwError("Tüm alanları doldurun.");
+      return;
+    }
+
+    setPwSaving(true);
+
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch("http://localhost:5000/api/users/change-password", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          currentPassword: curPass,
+          newPassword: newPass,
+          confirmPassword: confPass,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || "Şifre güncellenemedi.");
+      }
+
+      setPwSuccess(data.message || "Şifre başarıyla güncellendi.");
+      setCurPass("");
+      setNewPass("");
+      setConfPass("");
+    } catch (err) {
+      setPwError(err instanceof Error ? err.message : "Bir hata oluştu.");
+    } finally {
+      setPwSaving(false);
+    }
+  };
+
+  const handleTerminateSession = async (sessionId: string) => {
+    const token = localStorage.getItem("token");
+    try {
+      const res = await fetch(`http://localhost:5000/api/sessions/${sessionId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error("Oturum sonlandırılamadı.");
+      setSessions((prev) => prev.filter((s) => s.id !== sessionId));
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Bir hata oluştu.");
+    }
+  };
+
+  const handleTerminateAllOthers = async () => {
+    const token = localStorage.getItem("token");
+    try {
+      const res = await fetch("http://localhost:5000/api/sessions/others", {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error("Oturumlar sonlandırılamadı.");
+      setSessions((prev) => prev.filter((s) => s.current));
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Bir hata oluştu.");
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 p-7">
@@ -126,8 +230,19 @@ export default function SecurityPage() {
         />
         <PasswordInput label="Şifre tekrar" value={confPass} onChange={setConfPass} />
 
-        <button className="mt-4 px-5 py-2 rounded-lg bg-[#4F6EF7] text-white text-sm font-medium hover:bg-[#3d5ce0] transition-colors">
-          Şifreyi güncelle
+        {pwError && (
+          <p className="text-xs text-red-600 dark:text-red-400 mt-3">{pwError}</p>
+        )}
+        {pwSuccess && (
+          <p className="text-xs text-green-600 dark:text-green-400 mt-3">{pwSuccess}</p>
+        )}
+
+        <button
+          onClick={handleChangePassword}
+          disabled={pwSaving}
+          className="mt-4 px-5 py-2 rounded-lg bg-[#4F6EF7] text-white text-sm font-medium hover:bg-[#3d5ce0] transition-colors disabled:opacity-60"
+        >
+          {pwSaving ? "Güncelleniyor..." : "Şifreyi güncelle"}
         </button>
       </div>
 
@@ -155,7 +270,7 @@ export default function SecurityPage() {
           {
             key: "email" as const,
             label: "E-posta doğrulama",
-            desc: "sinan@test.com",
+            desc: userEmail || "E-posta bulunamadı",
             badge: twoFA.email ? { text: "Aktif", cls: "bg-green-50 text-green-700" } : { text: "Pasif", cls: "bg-gray-100 text-gray-500" },
           },
         ].map((item, i, arr) => (
@@ -186,26 +301,33 @@ export default function SecurityPage() {
         </div>
         <p className="text-xs text-gray-400 mb-4">Hesabınıza bağlı tüm cihazlar</p>
 
-        {[
-          { icon: <Monitor size={15} className="text-gray-400" />, name: "Windows · Chrome", meta: "İstanbul, TR · Şu an aktif", current: true },
-          { icon: <Smartphone size={15} className="text-gray-400" />, name: "iPhone · Safari", meta: "İstanbul, TR · 2 saat önce", current: false },
-          { icon: <Monitor size={15} className="text-gray-400" />, name: "MacBook · Firefox", meta: "Ankara, TR · 3 gün önce", current: false },
-        ].map((s, i, arr) => (
+        {sessions.length === 0 && (
+          <p className="text-sm text-gray-400">Aktif oturum bulunamadı.</p>
+        )}
+
+        {sessions.map((s, i, arr) => (
           <div
-            key={s.name}
+            key={s.id}
             className={`flex items-center gap-3 py-2.5 ${i < arr.length - 1 ? "border-b border-gray-100 dark:border-gray-700" : ""}`}
           >
             <div className="w-9 h-9 rounded-lg bg-gray-100 dark:bg-gray-800 flex items-center justify-center flex-shrink-0">
-              {s.icon}
+              {s.deviceType === "mobile" ? (
+                <Smartphone size={15} className="text-gray-400" />
+              ) : (
+                <Monitor size={15} className="text-gray-400" />
+              )}
             </div>
             <div className="flex-1">
-              <p className="text-sm font-medium text-gray-800 dark:text-gray-200">{s.name}</p>
-              <p className="text-xs text-gray-400 mt-0.5">{s.meta}</p>
+              <p className="text-sm font-medium text-gray-800 dark:text-gray-200">{s.deviceName}</p>
+              <p className="text-xs text-gray-400 mt-0.5">{new Date(s.lastActive).toLocaleString()}</p>
             </div>
             {s.current ? (
               <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-50 text-green-700">Bu cihaz</span>
             ) : (
-              <button className="px-2.5 py-1 rounded-md text-xs font-medium bg-red-50 text-red-700 border border-red-100 hover:bg-red-100 transition-colors">
+              <button
+                onClick={() => handleTerminateSession(s.id)}
+                className="px-2.5 py-1 rounded-md text-xs font-medium bg-red-50 text-red-700 border border-red-100 hover:bg-red-100 transition-colors"
+              >
                 Sonlandır
               </button>
             )}
@@ -233,7 +355,10 @@ export default function SecurityPage() {
               <p className="text-sm font-medium text-gray-800 dark:text-gray-200">{item.label}</p>
               <p className="text-xs text-gray-400 mt-0.5">{item.desc}</p>
             </div>
-            <button className="px-3 py-1.5 rounded-lg text-sm font-medium bg-red-50 text-red-700 border border-red-100 hover:bg-red-100 transition-colors">
+            <button
+              onClick={item.label === "Tüm oturumları sonlandır" ? handleTerminateAllOthers : undefined}
+              className="px-3 py-1.5 rounded-lg text-sm font-medium bg-red-50 text-red-700 border border-red-100 hover:bg-red-100 transition-colors"
+            >
               {item.label === "Hesabı sil" ? "Hesabı sil" : "Sonlandır"}
             </button>
           </div>

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   FileText, FilePlus, Search, MoreHorizontal, Download,
   Trash2, Edit3, Eye, Grid3X3, List, Star, StarOff,
@@ -8,15 +8,17 @@ import {
 type ViewMode = "grid" | "list";
 type FilterType = "all" | "starred" | "recent";
 
+const API_BASE = "http://localhost:5000";
+
 export interface OrgDocument {
   id: string;
   name: string;
   type: "pdf" | "doc" | "sheet" | "slide" | "image";
-  size: string;
-  updatedAt: string;
+  size: number;
+  filePath: string;
   starred: boolean;
-  tags: string[];
   orgId: string;
+  updatedAt: string;
 }
 
 const fileIcons: Record<OrgDocument["type"], { icon: React.ElementType; color: string; bg: string }> = {
@@ -31,99 +33,28 @@ const fileTypeLabels: Record<OrgDocument["type"], string> = {
   pdf: "PDF", doc: "Word", sheet: "Excel", slide: "Sunu", image: "Görsel",
 };
 
-const STORAGE_KEY = "org_documents";
-
-function loadDocs(): OrgDocument[] {
-  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]"); }
-  catch { return []; }
-}
-function saveDocs(docs: OrgDocument[]) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(docs));
+function formatSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-// ---------- Yeni Belge Modalı ----------
-interface NewDocModalProps {
-  orgId: string;
-  onClose: () => void;
-  onSave: (doc: OrgDocument) => void;
-}
+function formatTimeAgo(dateString: string): string {
+  const now = new Date();
+  const date = new Date(dateString);
+  const diff = now.getTime() - date.getTime();
+  const minutes = Math.floor(diff / 60000);
 
-function NewDocModal({ orgId, onClose, onSave }: NewDocModalProps) {
-  const [name, setName] = useState("");
-  const [type, setType] = useState<OrgDocument["type"]>("doc");
-  const [tag, setTag] = useState("");
-
-  const handleSubmit = () => {
-    if (!name.trim()) return;
-    onSave({
-      id: Date.now().toString(),
-      name: name.trim(),
-      type,
-      size: "—",
-      updatedAt: "Az önce",
-      starred: false,
-      tags: tag.trim() ? [tag.trim()] : [],
-      orgId,
-    });
-    onClose();
-  };
-
-  return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 backdrop-blur-sm">
-      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md p-6">
-        <h2 className="text-base font-semibold text-gray-800 dark:text-gray-100 mb-4">Yeni Belge</h2>
-        <div className="space-y-3">
-          <div>
-            <label className="text-xs text-gray-500 dark:text-gray-400 mb-1 block">Belge Adı</label>
-            <input
-            
-              autoFocus
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
-              placeholder="Belge adı girin..."
-              className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
-            />
-          </div>
-          <div>
-            <label className="text-xs text-gray-500 dark:text-gray-400 mb-1 block">Tür</label>
-            <select
-              value={type}
-              onChange={(e) => setType(e.target.value as OrgDocument["type"])}
-              className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-            >
-              {(Object.keys(fileTypeLabels) as OrgDocument["type"][]).map((t) => (
-                <option key={t} value={t}>{fileTypeLabels[t]}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="text-xs text-gray-500 dark:text-gray-400 mb-1 block">Etiket (opsiyonel)</label>
-            <input
-              type="text"
-              value={tag}
-              onChange={(e) => setTag(e.target.value)}
-              placeholder="örn. rapor, finans..."
-              className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-            />
-          </div>
-        </div>
-        <div className="flex gap-2 mt-5">
-          <button onClick={onClose} className="flex-1 py-2 rounded-lg border border-gray-200 dark:border-gray-700 text-sm text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
-            İptal
-          </button>
-          <button
-            onClick={handleSubmit}
-            disabled={!name.trim()}
-            className="flex-1 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white text-sm font-medium transition-colors"
-          >
-            Oluştur
-          </button>
-        </div>
-      </div>
-    </div>
-  );
+  if (minutes < 1) return "Az önce";
+  if (minutes < 60) return `${minutes} dakika önce`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} saat önce`;
+  const days = Math.floor(hours / 24);
+  if (days === 1) return "Dün";
+  if (days < 7) return `${days} gün önce`;
+  const weeks = Math.floor(days / 7);
+  if (weeks < 4) return `${weeks} hafta önce`;
+  return `${Math.floor(days / 30)} ay önce`;
 }
 
 // ---------- Ana Bileşen ----------
@@ -132,51 +63,169 @@ interface DocumentsTabProps {
 }
 
 export default function DocumentsTab({ orgId }: DocumentsTabProps) {
-  const [allDocs, setAllDocs] = useState<OrgDocument[]>(loadDocs);
+  const [docs, setDocs] = useState<OrgDocument[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [uploading, setUploading] = useState(false);
+
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<FilterType>("all");
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
-  const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
 
-  // Sadece bu org'a ait belgeler
-  const docs = allDocs.filter((d) => d.orgId === orgId);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  useEffect(() => { saveDocs(allDocs); }, [allDocs]);
-
-  const addDoc = (doc: OrgDocument) => setAllDocs((prev) => [doc, ...prev]);
-
-  const toggleStar = (id: string) =>
-    setAllDocs((prev) => prev.map((d) => d.id === id ? { ...d, starred: !d.starred } : d));
-
-  const deleteDoc = (id: string) => {
-    setAllDocs((prev) => prev.filter((d) => d.id !== id));
-    setActiveMenu(null);
+  const fetchDocs = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${API_BASE}/api/documents/${orgId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Belgeler yüklenemedi.");
+      setDocs(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Bir hata oluştu.");
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const confirmRename = (id: string) => {
-    if (editingName.trim())
-      setAllDocs((prev) =>
-        prev.map((d) => d.id === id ? { ...d, name: editingName.trim(), updatedAt: "Az önce" } : d)
-      );
-    setEditingId(null);
+  useEffect(() => {
+    fetchDocs();
+  }, [orgId]);
+
+  const uploadFiles = async (files: FileList | File[]) => {
+    const token = localStorage.getItem("token");
+    setUploading(true);
+    setError("");
+
+    for (const file of Array.from(files)) {
+      try {
+        const formData = new FormData();
+        formData.append("file", file);
+
+        const res = await fetch(`${API_BASE}/api/documents/${orgId}`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+          body: formData,
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          throw new Error(data.error || `${file.name} yüklenemedi.`);
+        }
+
+        setDocs((prev) => [data.document, ...prev]);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Yükleme sırasında bir hata oluştu.");
+      }
+    }
+
+    setUploading(false);
+  };
+
+  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      uploadFiles(e.target.files);
+    }
+    e.target.value = "";
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragging(false);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      uploadFiles(e.dataTransfer.files);
+    }
+  };
+
+  const toggleStar = async (id: string) => {
+    const token = localStorage.getItem("token");
+    try {
+      const res = await fetch(`${API_BASE}/api/documents/${id}/star`, {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "İşlem başarısız oldu.");
+      setDocs((prev) => prev.map((d) => (d.id === id ? data : d)));
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Bir hata oluştu.");
+    }
+  };
+
+  const deleteDoc = async (id: string) => {
+    const token = localStorage.getItem("token");
+    setActiveMenu(null);
+    try {
+      const res = await fetch(`${API_BASE}/api/documents/${id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Belge silinemedi.");
+      setDocs((prev) => prev.filter((d) => d.id !== id));
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Bir hata oluştu.");
+    }
+  };
+
+  const confirmRename = async (id: string) => {
+    if (!editingName.trim()) {
+      setEditingId(null);
+      return;
+    }
+
+    const token = localStorage.getItem("token");
+    try {
+      const res = await fetch(`${API_BASE}/api/documents/${id}/rename`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ name: editingName.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Yeniden adlandırılamadı.");
+      setDocs((prev) => prev.map((d) => (d.id === id ? data : d)));
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Bir hata oluştu.");
+    } finally {
+      setEditingId(null);
+    }
+  };
+
+  const handleDownload = (doc: OrgDocument) => {
+    window.open(`${API_BASE}${doc.filePath}`, "_blank");
   };
 
   const filtered = docs.filter((d) => {
     const m = d.name.toLowerCase().includes(search.toLowerCase());
     if (filter === "starred") return m && d.starred;
-    if (filter === "recent") return m && d.updatedAt.includes("önce");
+    if (filter === "recent") {
+      const hoursAgo = (Date.now() - new Date(d.updatedAt).getTime()) / 3600000;
+      return m && hoursAgo < 48;
+    }
     return m;
   });
 
   return (
     <div className="mt-2">
-      {showModal && (
-        <NewDocModal orgId={orgId} onClose={() => setShowModal(false)} onSave={addDoc} />
-      )}
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={handleFileInputChange}
+        multiple
+        className="hidden"
+      />
 
       {/* Toolbar */}
       <div className="flex flex-col sm:flex-row gap-3 mb-6">
@@ -218,18 +267,24 @@ export default function DocumentsTab({ orgId }: DocumentsTabProps) {
           </button>
         </div>
         <button
-          onClick={() => setShowModal(true)}
-          className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={uploading}
+          className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
         >
-          <FilePlus size={15} /> Yeni Belge
+          <FilePlus size={15} /> {uploading ? "Yükleniyor..." : "Yeni Belge"}
         </button>
       </div>
 
+      {error && (
+        <p className="text-xs text-red-600 dark:text-red-400 mb-4">{error}</p>
+      )}
+
       {/* Drop Zone */}
       <div
+        onClick={() => fileInputRef.current?.click()}
         onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
         onDragLeave={() => setIsDragging(false)}
-        onDrop={(e) => { e.preventDefault(); setIsDragging(false); }}
+        onDrop={handleDrop}
         className={`mb-6 border-2 border-dashed rounded-xl p-5 flex flex-col items-center gap-2 transition-all cursor-pointer ${
           isDragging
             ? "border-blue-400 bg-blue-50 dark:border-blue-500 dark:bg-blue-900/30"
@@ -243,11 +298,18 @@ export default function DocumentsTab({ orgId }: DocumentsTabProps) {
           Dosyaları buraya sürükleyin veya{" "}
           <span className="text-blue-600 dark:text-blue-400 hover:underline">seçin</span>
         </p>
-        <p className="text-xs text-gray-400 dark:text-gray-500">PDF, Word, Excel, Sunu, Görseller desteklenir</p>
+        <p className="text-xs text-gray-400 dark:text-gray-500">PDF, Word, Excel, Sunu, Görseller desteklenir (max 20MB)</p>
       </div>
 
+      {/* Yükleniyor durumu */}
+      {loading && (
+        <div className="flex items-center justify-center py-16">
+          <p className="text-sm text-gray-400">Belgeler yükleniyor...</p>
+        </div>
+      )}
+
       {/* Boş durum */}
-      {filtered.length === 0 && (
+      {!loading && filtered.length === 0 && (
         <div className="flex flex-col items-center justify-center py-16 text-center">
           <div className="w-14 h-14 rounded-2xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center mb-3">
             <FolderOpen size={24} className="text-gray-400 dark:text-gray-500" />
@@ -256,14 +318,11 @@ export default function DocumentsTab({ orgId }: DocumentsTabProps) {
           <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
             {search ? "Arama kriterlerini değiştirin" : "Henüz belge eklenmemiş"}
           </p>
-          <button onClick={() => setShowModal(true)} className="mt-4 text-xs text-blue-600 dark:text-blue-400 hover:underline font-medium">
-            + İlk belgeyi ekle
-          </button>
         </div>
       )}
 
       {/* Grid görünüm */}
-      {viewMode === "grid" && filtered.length > 0 && (
+      {!loading && viewMode === "grid" && filtered.length > 0 && (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
           {filtered.map((doc) => {
             const { icon: Icon, color, bg } = fileIcons[doc.type];
@@ -283,8 +342,12 @@ export default function DocumentsTab({ orgId }: DocumentsTabProps) {
                       </button>
                       {activeMenu === doc.id && (
                         <div className="absolute right-0 top-6 z-10 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-100 dark:border-gray-700 py-1 w-40">
-                          <button className="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"><Eye size={12} /> Görüntüle</button>
-                          <button className="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"><Download size={12} /> İndir</button>
+                          <button onClick={() => { handleDownload(doc); setActiveMenu(null); }} className="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700">
+                            <Eye size={12} /> Görüntüle
+                          </button>
+                          <button onClick={() => { handleDownload(doc); setActiveMenu(null); }} className="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700">
+                            <Download size={12} /> İndir
+                          </button>
                           <button
                             onClick={() => { setEditingId(doc.id); setEditingName(doc.name); setActiveMenu(null); }}
                             className="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
@@ -313,17 +376,10 @@ export default function DocumentsTab({ orgId }: DocumentsTabProps) {
                 ) : (
                   <p className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate mb-1">{doc.name}</p>
                 )}
-                <p className="text-xs text-gray-400 dark:text-gray-500 mb-3">{fileTypeLabels[doc.type]} · {doc.size}</p>
-                {doc.tags.length > 0 && (
-                  <div className="flex flex-wrap gap-1 mb-2">
-                    {doc.tags.map((tag) => (
-                      <span key={tag} className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 rounded text-[10px]">{tag}</span>
-                    ))}
-                  </div>
-                )}
+                <p className="text-xs text-gray-400 dark:text-gray-500 mb-3">{fileTypeLabels[doc.type]} · {formatSize(doc.size)}</p>
                 <div className="flex items-center gap-1">
                   <Clock size={10} className="text-gray-300 dark:text-gray-600" />
-                  <span className="text-[10px] text-gray-400 dark:text-gray-500">{doc.updatedAt}</span>
+                  <span className="text-[10px] text-gray-400 dark:text-gray-500">{formatTimeAgo(doc.updatedAt)}</span>
                   {doc.starred && <Star size={10} className="text-amber-400 fill-amber-400 ml-auto" />}
                 </div>
               </div>
@@ -333,7 +389,7 @@ export default function DocumentsTab({ orgId }: DocumentsTabProps) {
       )}
 
       {/* Liste görünüm */}
-      {viewMode === "list" && filtered.length > 0 && (
+      {!loading && viewMode === "list" && filtered.length > 0 && (
         <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 overflow-hidden">
           <div className="grid grid-cols-[2fr_1fr_1fr_1fr_auto] px-4 py-2.5 border-b border-gray-100 dark:border-gray-700 text-xs text-gray-400 dark:text-gray-500 font-medium">
             <span>Ad</span><span>Tür</span><span>Boyut</span><span>Güncelleme</span><span></span>
@@ -361,14 +417,17 @@ export default function DocumentsTab({ orgId }: DocumentsTabProps) {
                   {doc.starred && <Star size={12} className="text-amber-400 fill-amber-400 flex-shrink-0" />}
                 </div>
                 <span className="text-xs text-gray-500 dark:text-gray-400">{fileTypeLabels[doc.type]}</span>
-                <span className="text-xs text-gray-500 dark:text-gray-400">{doc.size}</span>
-                <span className="text-xs text-gray-400 dark:text-gray-500">{doc.updatedAt}</span>
+                <span className="text-xs text-gray-500 dark:text-gray-400">{formatSize(doc.size)}</span>
+                <span className="text-xs text-gray-400 dark:text-gray-500">{formatTimeAgo(doc.updatedAt)}</span>
                 <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                   <button onClick={() => toggleStar(doc.id)} className="p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700">
                     {doc.starred ? <Star size={13} className="text-amber-400 fill-amber-400" /> : <StarOff size={13} className="text-gray-400 dark:text-gray-500" />}
                   </button>
                   <button onClick={() => { setEditingId(doc.id); setEditingName(doc.name); }} className="p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700">
                     <Edit3 size={13} className="text-gray-400 dark:text-gray-500" />
+                  </button>
+                  <button onClick={() => handleDownload(doc)} className="p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700">
+                    <Download size={13} className="text-gray-400 dark:text-gray-500" />
                   </button>
                   <button onClick={() => deleteDoc(doc.id)} className="p-1.5 rounded hover:bg-red-50 dark:hover:bg-red-900/20">
                     <Trash2 size={13} className="text-red-400" />

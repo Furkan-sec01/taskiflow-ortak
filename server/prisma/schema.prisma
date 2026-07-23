@@ -13,6 +13,7 @@ model Organization {
   ownerId       String
   members       User_Organization[]
   projects      Project[]
+  documents     Document[]
   notifications Notification[]
   createdAt     DateTime              @default(now())
 }
@@ -23,6 +24,8 @@ model User {
   name              String?
   password          String?
   status            String                @default("active")
+  sessions          Session[]
+  documents     Document[]
   verificationToken String?               @unique
 
   username          String?               @unique
@@ -179,3 +182,28 @@ model BillingProfile {
   updatedAt   DateTime @updatedAt
 }
 
+model Session {
+  id         String   @id @default(uuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token      String   @unique
+  deviceName String?
+  deviceType String?
+  ipAddress  String?
+  lastActive DateTime @default(now())
+  createdAt  DateTime @default(now())
+}
+model Document {
+  id         String       @id @default(uuid())
+  name       String
+  type       String
+  size       Int
+  filePath   String
+  starred    Boolean      @default(false)
+  orgId      String
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  uploaderId String
+  uploader   User         @relation(fields: [uploaderId], references: [id])
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+}

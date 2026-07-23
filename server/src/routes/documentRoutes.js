@@ -1,10 +1,15 @@
 const express = require("express");
 const router = express.Router();
+const documentController = require("../controllers/documentController");
+const authenticateToken = require("../middleware/authMiddleware");
+const { uploadDocument } = require("../middleware/documentUpload");
 
-// Test amaçlı temel bir rota (ileride döküman yükleme kodlarını buraya eklersin)
-router.get("/", (req, res) => {
-  res.json({ message: "Döküman rotası çalışıyor!" });
-});
+router.use(authenticateToken);
 
-// Sunucunun çökmesini engelleyen asıl eksik kısım:
+router.get("/:orgId", documentController.getDocuments);
+router.post("/:orgId", uploadDocument.single("file"), documentController.uploadDocument);
+router.patch("/:docId/star", documentController.toggleStar);
+router.patch("/:docId/rename", documentController.renameDocument);
+router.delete("/:docId", documentController.deleteDocument);
+
 module.exports = router;

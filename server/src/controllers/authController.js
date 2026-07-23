@@ -135,7 +135,18 @@ exports.login = async (req,res) => {
       JWT_SECRET,
       {expiresIn: '24h'}
     );
+    const userAgent = req.headers["user-agent"] || "Bilinmeyen Cihaz";
+    const isMobile = /mobile/i.test(userAgent);
 
+    await prisma.session.create({
+      data: {
+        userId: user.id,
+        token: token,
+        deviceName: userAgent.slice(0, 100),
+        deviceType: isMobile ? "mobile" : "web",
+        ipAddress: req.ip,
+      },
+    });
     const {password: _, ...userData} = user;
     res.json({ message: "Giriş Başarılı", token, user: userData, userOrganizations: user.organizations });
 

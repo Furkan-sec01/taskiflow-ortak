@@ -33,9 +33,9 @@ exports.getProjects = async (req, res) => {
     }
 };
 
-//yeni proje
+
 exports.createProject = async (req, res) => {
-    const { title, description, organizationId } = req.body;
+    const { title, description, organizationId, initialColumns } = req.body;
     const userId = req.user.id || req.user.userId;
 
     if (!title || !description) {
@@ -91,6 +91,18 @@ exports.createProject = async (req, res) => {
                     userId: userId,
                     projectId: project.id
                 }
+            });
+
+            const columnsToCreate = Array.isArray(initialColumns) && initialColumns.length > 0
+                ? initialColumns
+                : ["Yapılacaklar", "Yapılıyor", "Tamamlandı"];
+
+            await tx.column.createMany({
+                data: columnsToCreate.map((columnTitle, index) => ({
+                    title: columnTitle,
+                    order: index,
+                    projectId: project.id
+                }))
             });
 
             return project;
