@@ -60,6 +60,8 @@ import ReportsList from "./pages/Reportslist";   // ← YENİ
 
 import Proje from './pages/Proje';
 
+import Sprints from './pages/Sprints';
+
 import Members from "./pages/Members";
 
 import Projelerim from "./pages/Projelerim";
@@ -198,6 +200,8 @@ const App = () => (
                         <Route path="/projects" element={<Projelerim />} />
 
                         <Route path="/projects/:projectId" element={<Proje />} />
+
+                        <Route path="/projects/:projectId/sprints" element={<Sprints />} />
 
                         <Route path="/dashboard" element={<Dashboard />} />
 

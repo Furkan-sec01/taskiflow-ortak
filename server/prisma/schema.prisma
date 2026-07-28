@@ -74,6 +74,7 @@ model Project {
   members       User_Project[]
   tasks         Task[]
   columns       Column[]
+  sprints       Sprint[]
   createdAt     DateTime        @default(now())
   updatedAt     DateTime        @updatedAt
 }
@@ -115,9 +116,33 @@ model Task {
   isTracking    Boolean    @default(false)
   lastStartedAt DateTime?
   isCompleted   Boolean    @default(false)
+  storyPoints   Int        @default(0)
+  sprintId      String?
+  sprint        Sprint?    @relation(fields: [sprintId], references: [id], onDelete: SetNull)
   createdAt     DateTime   @default(now())
   completedAt   DateTime?
   updatedAt     DateTime   @updatedAt
+}
+
+enum SprintStatus {
+  PLANNED
+  ACTIVE
+  COMPLETED
+}
+
+model Sprint {
+  id          String       @id @default(uuid())
+  name        String
+  goal        String?
+  status      SprintStatus @default(PLANNED)
+  startDate   DateTime?
+  endDate     DateTime?
+  completedAt DateTime?
+  projectId   String
+  project     Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tasks       Task[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
 }
 
 model Notification {
@@ -155,8 +180,8 @@ model Payment {
   currency    String   @default("TRY")
   status      String   @default("PENDING") // PENDING - PAID - FAILED - REFUNDED
   provider    String?  // iyzico, stripe, manual
-  iyzicoPaymentId String?   // 🔥 YENİ
-  conversationId  String?   // 🔥 YENİ
+  iyzicoPaymentId String?  
+  conversationId  String?   
   description String?
 
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)

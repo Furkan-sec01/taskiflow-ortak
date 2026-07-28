@@ -16,6 +16,7 @@ const notFound = require("./src/middleware/notFound");
 const errorHandler = require("./src/middleware/errorHandler");
 const sessionRoutes = require("./src/routes/sessionRoutes");
 const documentRoutes = require("./src/routes/documentRoutes");
+const sprintRoutes = require("./src/routes/sprintRoutes");
 
 const allowedOrigins = process.env.FRONTEND_URL
   ? process.env.FRONTEND_URL.split(",").map((o) => o.trim())
@@ -43,6 +44,7 @@ app.use("/api/tasks", taskRoutes);
 app.use("/api/payments", paymentRoutes);
 app.use("/api/sessions", sessionRoutes);
 app.use("/api/documents", documentRoutes);
+app.use("/api/sprints", sprintRoutes);
 
 app.get("/", (req, res) => {
   res.json({ message: "TaskiFlow Backend çalışıyor! 🚀" });

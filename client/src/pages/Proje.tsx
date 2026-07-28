@@ -227,6 +227,8 @@ const Proje: React.FC = () => {
 
   //görev oluşturma
   const handleSaveTask = async () => {
+    console.log("İstek atılan veriler:", { projectId, activeColId, newTask });
+    
     if (!newTask.title || !activeColId || !newTask.assigneeMail) {
       toast.error("Lütfen başlık ve ekip üyesi seçtiğinizden emin olun.");
       return;
@@ -389,7 +391,12 @@ const Proje: React.FC = () => {
               <UserPlus size={14} /> Ekle
             </button>
 
-
+            <button
+              onClick={() => navigate(`/projects/${projectId}/sprints`)}
+              className="flex items-center gap-2 bg-white text-indigo-600 border border-indigo-200 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-indigo-50 hover:-translate-y-0.5 transition-all"
+            >
+              🏃 Sprintler
+            </button>
 
           <div className="flex bg-gray-100 p-1 rounded-xl gap-1">
             {["ALL", "HIGH", "MEDIUM", "LOW"].map((p) => (

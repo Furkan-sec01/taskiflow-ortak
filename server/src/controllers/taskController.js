@@ -226,6 +226,94 @@ exports.toggleTimer = async (req, res)=>{
         res.status(500).json({ error: "Zaman güncellenirken bir hata oluştu." });
     }
 }
+
+
+exports.assignSprint = async (req, res) => {
+    const { taskId } = req.params;
+    const { sprintId } = req.body;
+    const userId = req.user.id || req.user.userId;
+
+    try {
+        const task = await prisma.task.findUnique({
+            where: { id: taskId },
+            include: { project: true }
+        });
+
+        if (!task) {
+            return res.status(404).json({ error: "Görev bulunamadı." });
+        }
+
+        const isOwner = task.project.ownerId === userId;
+        const membership = await prisma.user_Project.findUnique({
+            where: { userId_projectId: { userId, projectId: task.projectId } }
+        });
+
+        if (!isOwner && !membership) {
+            return res.status(403).json({ error: "Bu görevi düzenleme yetkiniz yok." });
+        }
+
+        if (sprintId) {
+            const sprint = await prisma.sprint.findUnique({ where: { id: sprintId } });
+            if (!sprint || sprint.projectId !== task.projectId) {
+                return res.status(400).json({ error: "Geçersiz sprint." });
+            }
+        }
+
+        const updatedTask = await prisma.task.update({
+            where: { id: taskId },
+            data: { sprintId: sprintId || null }
+        });
+
+        res.status(200).json({
+            message: sprintId ? "Görev sprinte eklendi." : "Görev sprintten çıkarıldı.",
+            task: updatedTask
+        });
+    } catch (error) {
+        console.error("assignSprint Hatası:", error);
+        res.status(500).json({ error: "Görev güncellenirken bir hata oluştu." });
+    }
+};
+
+
+exports.updateStoryPoints = async (req, res) => {
+    const { taskId } = req.params;
+    const { storyPoints } = req.body;
+    const userId = req.user.id || req.user.userId;
+
+    if (storyPoints === undefined || storyPoints === null || Number(storyPoints) < 0) {
+        return res.status(400).json({ error: "Geçerli bir puan girin." });
+    }
+
+    try {
+        const task = await prisma.task.findUnique({
+            where: { id: taskId },
+            include: { project: true }
+        });
+
+        if (!task) {
+            return res.status(404).json({ error: "Görev bulunamadı." });
+        }
+
+        const isOwner = task.project.ownerId === userId;
+        const membership = await prisma.user_Project.findUnique({
+            where: { userId_projectId: { userId, projectId: task.projectId } }
+        });
+
+        if (!isOwner && !membership) {
+            return res.status(403).json({ error: "Bu görevi düzenleme yetkiniz yok." });
+        }
+
+        const updatedTask = await prisma.task.update({
+            where: { id: taskId },
+            data: { storyPoints: Number(storyPoints) }
+        });
+
+        res.status(200).json({ message: "Puan güncellendi.", task: updatedTask });
+    } catch (error) {
+        console.error("updateStoryPoints Hatası:", error);
+        res.status(500).json({ error: "Puan güncellenirken bir hata oluştu." });
+    }
+};
 exports.completeTask = async (req, res) => {
     const { taskId } = req.params;
     const { action } = req.body; // "COMPLETED" veya "NONE"

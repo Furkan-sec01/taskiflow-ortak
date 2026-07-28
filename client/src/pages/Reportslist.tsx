@@ -1,8 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  BarChart2, Clock, TrendingUp, Zap, AlertCircle,
-  ChevronRight, Activity, Building2,
+  BarChart2, ChevronRight, Building2,
 } from "lucide-react";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -16,29 +15,7 @@ interface Project {
   icon: React.ReactNode;
 }
 
-// ── Sabit projeler ─────────────────────────────────────────────────────────────
-const STATIC_PROJECTS: Project[] = [];
-
-// Dinamik renk paleti — yeni org'lar için sırayla kullanılır
 const DYNAMIC_COLORS = ["#6366f1", "#ec4899", "#14b8a6", "#f97316", "#84cc16", "#a855f7"];
-
-// localStorage'dan dinamik org'ları okuyup Project dizisine dönüştür
-const getDynamicProjects = (): Project[] => {
-  try {
-    const stored = JSON.parse(localStorage.getItem("orgProjects") || "{}");
-    return Object.entries(stored).map(([id, meta]: [string, any], index) => ({
-      id,
-      name: meta.name,
-      description: `${meta.name} çalışma alanı — organizasyona ait proje raporları.`,
-      status: "active" as const,
-      sprint: meta.sprint || "Sprint 1",
-      color: DYNAMIC_COLORS[index % DYNAMIC_COLORS.length],
-      icon: <Building2 size={20} />,
-    }));
-  } catch {
-    return [];
-  }
-};
 
 const STATUS_CONFIG = {
   active:    { label: "Aktif",        dot: "bg-emerald-500", text: "text-emerald-600 dark:text-emerald-400", bg: "bg-emerald-50 dark:bg-emerald-900/30" },
@@ -50,16 +27,42 @@ const STATUS_CONFIG = {
 export default function ReportsList() {
   const navigate = useNavigate();
   const [projects, setProjects] = useState<Project[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  const loadProjects = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch("http://localhost:5000/api/project/my-projects", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+
+      if (!res.ok) throw new Error(data.error || "Projeler yüklenemedi.");
+
+      const projectsArray = data.projects || (Array.isArray(data) ? data : []);
+      const mapped: Project[] = projectsArray.map((p: any, index: number) => ({
+        id: p.id,
+        name: p.title,
+        description: p.description || `${p.title} çalışma alanı — proje raporları.`,
+        status: "active" as const,
+        sprint: "Genel Görünüm",
+        color: DYNAMIC_COLORS[index % DYNAMIC_COLORS.length],
+        icon: <Building2 size={20} />,
+      }));
+
+      setProjects(mapped);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Bir hata oluştu.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    // Sayfa açıldığında ve teams-updated eventi geldiğinde projeleri yenile
-    const loadProjects = () => {
-      const dynamic = getDynamicProjects();
-      setProjects([...STATIC_PROJECTS, ...dynamic]);
-    };
-
     loadProjects();
-
     window.addEventListener("teams-updated", loadProjects);
     return () => window.removeEventListener("teams-updated", loadProjects);
   }, []);
@@ -85,6 +88,20 @@ export default function ReportsList() {
             Detaylı raporu görüntülemek için bir projeye tıklayın.
           </p>
         </div>
+
+        {loading && (
+          <p className="text-sm text-slate-400">Projeler yükleniyor...</p>
+        )}
+
+        {error && (
+          <p className="text-sm text-red-500 mb-4">{error}</p>
+        )}
+
+        {!loading && !error && projects.length === 0 && (
+          <p className="text-sm text-slate-400">
+            Henüz erişebildiğin bir proje yok. Bir organizasyonda projeye üye olduğunda ya da bir proje oluşturduğunda burada görünecek.
+          </p>
+        )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {projects.map((project) => {

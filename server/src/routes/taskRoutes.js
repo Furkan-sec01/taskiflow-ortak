@@ -8,5 +8,7 @@ router.post("/create/:projectId/:columnId", taskController.createTask);
 router.delete("/delete/:taskId", taskController.deleteTask); 
 router.patch("/:taskId/timer", taskController.toggleTimer);
 router.patch("/:taskId/complete", taskController.completeTask);
+router.patch("/:taskId/sprint", taskController.assignSprint);
+router.patch("/:taskId/points", taskController.updateStoryPoints);
 
 module.exports = router;

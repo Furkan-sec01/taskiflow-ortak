@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   LineChart, Line, BarChart, Bar, AreaChart, Area,
@@ -20,47 +20,7 @@ interface Issue {
   priority: Priority; assignee: string; sp: number; age: number;
 }
 
-// ── Sabit proje meta verileri (hardcoded projeler) ─────────────────────────────
-const STATIC_PROJECT_META: Record<string, { name: string; sprint: string }> = {
-  "proj-alpha":   { name: "PROJ-Alpha",   sprint: "Sprint 7" },
-  "proj-beta":    { name: "PROJ-Beta",    sprint: "Sprint 4" },
-  "proj-gamma":   { name: "PROJ-Gamma",   sprint: "Sprint 2" },
-  "proj-delta":   { name: "PROJ-Delta",   sprint: "Sprint 6" },
-  "proj-epsilon": { name: "PROJ-Epsilon", sprint: "Sprint 3" },
-  "proj-zeta":    { name: "PROJ-Zeta",    sprint: "Sprint 5" },
-};
-
-// ── localStorage'dan dinamik org'ları da dahil eden meta getter ────────────────
-const getProjectMeta = (): Record<string, { name: string; sprint: string }> => {
-  try {
-    const stored = JSON.parse(localStorage.getItem("orgProjects") || "{}");
-    return { ...STATIC_PROJECT_META, ...stored };
-  } catch {
-    return STATIC_PROJECT_META;
-  }
-};
-
-// ── Initial Data ───────────────────────────────────────────────────────────────
-const INITIAL_ISSUES: Issue[] = [
-  { key: "PROJ-101", summary: "Login sayfası tasarımı", status: "done", priority: "high", assignee: "Ahmet K.", sp: 5, age: 3 },
-  { key: "PROJ-102", summary: "API endpoint güvenlik testi", status: "done", priority: "high", assignee: "Zeynep M.", sp: 8, age: 5 },
-  { key: "PROJ-103", summary: "Dashboard veri entegrasyonu", status: "progress", priority: "high", assignee: "Burak T.", sp: 13, age: 7 },
-  { key: "PROJ-104", summary: "Kullanıcı profil sayfası", status: "progress", priority: "medium", assignee: "Selin A.", sp: 5, age: 4 },
-  { key: "PROJ-105", summary: "Email bildirim sistemi", status: "todo", priority: "medium", assignee: "Ahmet K.", sp: 8, age: 10 },
-  { key: "PROJ-106", summary: "Rapor export özelliği", status: "blocked", priority: "high", assignee: "Zeynep M.", sp: 8, age: 14 },
-  { key: "PROJ-107", summary: "Arama fonksiyonu optimizasyonu", status: "done", priority: "low", assignee: "Burak T.", sp: 3, age: 2 },
-  { key: "PROJ-108", summary: "Mobile responsive düzenlemeler", status: "progress", priority: "medium", assignee: "Selin A.", sp: 5, age: 6 },
-  { key: "PROJ-109", summary: "Veritabanı indeks optimizasyonu", status: "done", priority: "high", assignee: "Ahmet K.", sp: 8, age: 8 },
-  { key: "PROJ-110", summary: "Unit test kapsamı artırma", status: "todo", priority: "medium", assignee: "Zeynep M.", sp: 5, age: 9 },
-  { key: "PROJ-111", summary: "CI/CD pipeline iyileştirme", status: "todo", priority: "low", assignee: "Burak T.", sp: 3, age: 11 },
-  { key: "PROJ-112", summary: "Kullanıcı onboarding akışı", status: "progress", priority: "high", assignee: "Selin A.", sp: 13, age: 24 },
-  { key: "PROJ-113", summary: "Hata izleme entegrasyonu", status: "done", priority: "medium", assignee: "Ahmet K.", sp: 5, age: 3 },
-  { key: "PROJ-114", summary: "Performans benchmark raporu", status: "done", priority: "low", assignee: "Zeynep M.", sp: 3, age: 4 },
-  { key: "PROJ-115", summary: "Erişilebilirlik (a11y) güncellemesi", status: "done", priority: "medium", assignee: "Burak T.", sp: 5, age: 5 },
-  { key: "PROJ-116", summary: "GraphQL sorgu optimizasyonu", status: "done", priority: "high", assignee: "Selin A.", sp: 8, age: 6 },
-];
-
-// ── Static Chart Data ──────────────────────────────────────────────────────────
+// ── Static Chart Data (gerçek sprint/geçmiş verisi olmadığı için örnek veri) ───
 const BURNDOWN_DATA = [
   { day: "Gün 1", ideal: 80, actual: 80 },
   { day: "Gün 2", ideal: 71, actual: 75 },
@@ -192,6 +152,15 @@ function SectionCard({ title, subtitle, children }: { title: string; subtitle?: 
   );
 }
 
+// ── Gerçek olmayan (örnek) veriye sahip sekmeler için uyarı rozeti ─────────────
+function DemoBadge() {
+  return (
+    <div className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 px-2.5 py-1 rounded-lg mb-1">
+      ⚠ Örnek veri — gerçek sprint geçmişi henüz takip edilmiyor
+    </div>
+  );
+}
+
 const chartProps = (dark: boolean) => ({
   cartesianGrid: { stroke: dark ? "#334155" : "#f1f5f9" },
   tick: { fill: dark ? "#94a3b8" : "#64748b", fontSize: 12 },
@@ -205,6 +174,7 @@ function BurndownPanel({ dark }: { dark: boolean }) {
   const cp = chartProps(dark);
   return (
     <div className="space-y-5">
+      <DemoBadge />
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <KpiCard label="Toplam SP" value={80} sub="Sprint 7" />
         <KpiCard label="Kalan" value={28} sub="story point" color="text-blue-600 dark:text-blue-400" />
@@ -232,6 +202,7 @@ function BurnupPanel({ dark }: { dark: boolean }) {
   const cp = chartProps(dark);
   return (
     <div className="space-y-5">
+      <DemoBadge />
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <KpiCard label="Toplam Hedef" value={80} />
         <KpiCard label="Tamamlanan" value={52} color="text-emerald-600 dark:text-emerald-400" />
@@ -271,7 +242,7 @@ function SprintPanel({ issues, onAdd, dark }: { issues: Issue[]; onAdd: () => vo
         <KpiCard label="Yapılacak" value={counts.todo} />
         <KpiCard label="Bloke" value={counts.blocked} color="text-red-500" />
       </div>
-      <SectionCard title="Sprint 7 — Görev Listesi">
+      <SectionCard title="Görev Listesi" subtitle="Gerçek proje verisi">
         <div className="flex justify-end mb-3">
           <button onClick={onAdd} className="inline-flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors">
             <Plus size={13} /> Görev Ekle
@@ -287,6 +258,13 @@ function SprintPanel({ issues, onAdd, dark }: { issues: Issue[]; onAdd: () => vo
               </tr>
             </thead>
             <tbody>
+              {issues.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="px-3 py-6 text-center text-slate-400 text-xs">
+                    Bu projede henüz görev yok.
+                  </td>
+                </tr>
+              )}
               {issues.map(issue => {
                 const sc = SC[issue.status];
                 const initials = issue.assignee.split(" ").map(x => x[0]).join("");
@@ -325,6 +303,7 @@ function VelocityPanel({ dark }: { dark: boolean }) {
   const cp = chartProps(dark);
   return (
     <div className="space-y-5">
+      <DemoBadge />
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <KpiCard label="Ort. Velocity" value={58} sub="SP / sprint" color="text-blue-600 dark:text-blue-400" />
         <KpiCard label="En Yüksek" value={72} color="text-emerald-600 dark:text-emerald-400" />
@@ -352,6 +331,7 @@ function CFDPanel({ dark }: { dark: boolean }) {
   const cp = chartProps(dark);
   return (
     <div className="space-y-5">
+      <DemoBadge />
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <KpiCard label="Yapılacak" value={12} />
         <KpiCard label="Devam Eden" value={7} color="text-blue-600 dark:text-blue-400" />
@@ -381,6 +361,7 @@ function ControlPanel({ dark }: { dark: boolean }) {
   const cp = chartProps(dark);
   return (
     <div className="space-y-5">
+      <DemoBadge />
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <KpiCard label="Ort. Cycle Time" value="3.2" sub="gün" color="text-blue-600 dark:text-blue-400" />
         <KpiCard label="Medyan" value="2.8" sub="gün" />
@@ -408,6 +389,7 @@ function CreatedPanel({ dark }: { dark: boolean }) {
   const cp = chartProps(dark);
   return (
     <div className="space-y-5">
+      <DemoBadge />
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <KpiCard label="Toplam Açılan" value={94} />
         <KpiCard label="Toplam Çözülen" value={78} color="text-emerald-600 dark:text-emerald-400" />
@@ -495,7 +477,7 @@ function AgePanel({ issues, dark }: { issues: Issue[]; dark: boolean }) {
         <KpiCard label="Kritik (>14g)" value={oldIssues.filter(i => i.age > 14).length} color="text-red-500" />
         <KpiCard label="Toplam Açık" value={issues.filter(i => i.status !== "done").length} />
       </div>
-      <SectionCard title="Average Age Report" subtitle="Durum bazında ortalama yaş">
+      <SectionCard title="Average Age Report" subtitle="Durum bazında ortalama yaş (örnek dağılım)">
         <ResponsiveContainer width="100%" height={220}>
           <BarChart data={AGE_DATA} layout="vertical">
             <CartesianGrid strokeDasharray="3 3" stroke={cp.cartesianGrid.stroke} />
@@ -506,7 +488,7 @@ function AgePanel({ issues, dark }: { issues: Issue[]; dark: boolean }) {
           </BarChart>
         </ResponsiveContainer>
       </SectionCard>
-      <SectionCard title="Uzun Süredir Bekleyen Görevler">
+      <SectionCard title="Uzun Süredir Bekleyen Görevler" subtitle="Gerçek proje verisi">
         <div className="overflow-x-auto">
           <table className="w-full text-[13px]">
             <thead>
@@ -517,6 +499,13 @@ function AgePanel({ issues, dark }: { issues: Issue[]; dark: boolean }) {
               </tr>
             </thead>
             <tbody>
+              {oldIssues.length === 0 && (
+                <tr>
+                  <td colSpan={4} className="px-3 py-6 text-center text-slate-400 text-xs">
+                    7 günden eski, tamamlanmamış görev yok.
+                  </td>
+                </tr>
+              )}
               {oldIssues.map(issue => {
                 const sc = SC[issue.status];
                 return (
@@ -627,15 +616,43 @@ export default function Reports() {
   const navigate = useNavigate();
   const { projectId } = useParams<{ projectId: string }>();
   const [activeTab, setActiveTab] = useState<TabId>("burndown");
-  const [issues, setIssues] = useState<Issue[]>(INITIAL_ISSUES);
+  const [issues, setIssues] = useState<Issue[]>([]);
+  const [projectTitle, setProjectTitle] = useState("Yükleniyor...");
   const [showModal, setShowModal] = useState(false);
   const { dark, toggleDark } = useDark();
 
-  // localStorage'daki dinamik org'lar dahil tüm meta verileri al
-  const allProjectMeta = getProjectMeta();
+  useEffect(() => {
+    if (!projectId) return;
+    const token = localStorage.getItem("token");
 
-  // Proje meta bilgisi — bilinmiyorsa fallback
-  const meta = (projectId && allProjectMeta[projectId]) ?? { name: "TaskiFlow", sprint: "Sprint 1" };
+    fetch(`http://localhost:5000/api/project/${projectId}/board`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        setProjectTitle(data.title || "Proje");
+
+        const allTasks = (data.columns || []).flatMap((col: any) => col.tasks || []);
+
+        const mappedIssues: Issue[] = allTasks.map((t: any) => {
+          const ageDays = Math.floor(
+            (Date.now() - new Date(t.createdAt).getTime()) / (1000 * 60 * 60 * 24)
+          );
+          return {
+            key: t.id.slice(0, 8).toUpperCase(),
+            summary: t.title,
+            status: t.isCompleted ? "done" : t.isTracking ? "progress" : "todo",
+            priority: (t.priority || "MEDIUM").toLowerCase() as Priority,
+            assignee: t.assignee?.name || "Atanmamış",
+            sp: t.priority === "HIGH" ? 8 : t.priority === "MEDIUM" ? 5 : 3,
+            age: ageDays,
+          };
+        });
+
+        setIssues(mappedIssues);
+      })
+      .catch(() => setIssues([]));
+  }, [projectId]);
 
   const addIssue = (issue: Issue) => setIssues(prev => [...prev, issue]);
   const activeLabel = TABS.find(t => t.id === activeTab)?.label ?? "";
@@ -661,7 +678,7 @@ export default function Reports() {
               Raporlar
             </button>
             <span className="text-slate-300 dark:text-slate-600">›</span>
-            <span className="text-sm font-bold text-slate-800 dark:text-slate-100">{meta.name}</span>
+            <span className="text-sm font-bold text-slate-800 dark:text-slate-100">{projectTitle}</span>
             <span className="text-slate-300 dark:text-slate-600">›</span>
             <span className="text-sm text-slate-500 dark:text-slate-400">{activeLabel}</span>
           </div>
@@ -679,7 +696,7 @@ export default function Reports() {
             </button>
             <div className="flex items-center gap-1.5 text-xs text-slate-400 bg-blue-50 dark:bg-blue-900/30 border border-blue-100 dark:border-blue-800 px-3 py-1.5 rounded-lg">
               <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse" />
-              {meta.name} · {meta.sprint}
+              {projectTitle} · {issues.length} görev
             </div>
           </div>
         </div>
