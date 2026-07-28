@@ -3,6 +3,7 @@ const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
 const app = express();
+app.set("trust proxy", 1);
 
 const authRoutes = require("./src/routes/authRoutes");
 const projectRoutes = require("./src/routes/projectRoutes");

@@ -10,6 +10,7 @@ const {
 } = require("../controllers/paymentController.js");
 
 const authenticateToken = require("../middleware/authMiddleware");
+const paymentLimiter = require("../middleware/paymentLimiter");
 
 const router = express.Router();
 
@@ -21,9 +22,8 @@ router.get("/overview", getBillingOverview);
 router.get("/history", getPaymentHistory);
 router.put("/billing-profile", updateBillingProfile);
 router.post("/change-plan", changeSubscriptionPlan);
-router.post("/initialize-3ds", initialize3DSPayment);
+router.post("/initialize-3ds", paymentLimiter, initialize3DSPayment);
 
-// 🔥 DÜZELTİLDİ
 router.post("/cancel-subscription", cancelSubscription);
 
 module.exports = router;

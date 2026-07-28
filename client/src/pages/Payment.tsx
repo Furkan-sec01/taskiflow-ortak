@@ -26,6 +26,14 @@ const Payment = () => {
 
   const [isProcessing, setIsProcessing] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [iyzicoHtml, setIyzicoHtml] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (iyzicoHtml) {
+      const form = document.getElementById("iyzico-3ds-form") as HTMLFormElement;
+      if (form) form.submit();
+    }
+  }, [iyzicoHtml]);
 
   useEffect(() => {
     // Eğer plan ve fiyat yoksa ana sayfaya yönlendir
@@ -107,9 +115,15 @@ const Payment = () => {
     return Object.keys(newErrors).length === 0;
   };
 
+  const planKeyMap: Record<string, string> = {
+    "Başlangıç Planı": "FREE",
+    "Profesyonel": "PRO",
+    "Kurumsal": "BUSINESS",
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!validateForm()) {
       return;
     }
@@ -117,18 +131,48 @@ const Payment = () => {
     setIsProcessing(true);
 
     try {
-      // Demo modunda ödeme işlemi simülasyonu
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      const token = localStorage.getItem("token");
+      const [expMonth, expYear] = formData.expiryDate.split("/");
 
-      // Başarılı ödeme sonrası
-      navigate(`/payment-success?plan=${encodeURIComponent(planName)}&price=${price}`);
+      const response = await fetch("/api/payments/initialize-3ds", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          plan: planKeyMap[planName] || "PRO",
+          email: formData.email,
+          card: {
+            name: formData.cardName,
+            number: formData.cardNumber.replace(/\s/g, ""),
+            expMonth,
+            expYear: `20${expYear}`,
+            cvc: formData.cvv,
+          },
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.htmlContent) {
+        setIyzicoHtml(data.htmlContent);
+      } else {
+        toast.error(data.message || "Ödeme başlatılamadı.");
+        setIsProcessing(false);
+      }
     } catch (error) {
       console.error("Ödeme hatası:", error);
-      toast.error("Ödeme işlemi sırasında bir hata oluştu. Lütfen tekrar deneyin.");
-    } finally {
+      toast.error("Sunucuya ulaşılamadı. Lütfen tekrar deneyin.");
       setIsProcessing(false);
     }
   };
+
+  if (iyzicoHtml) {
+    return (
+      <div className="w-full h-screen bg-white" dangerouslySetInnerHTML={{ __html: iyzicoHtml }} />
+    );
+  }
 
   return (
     <div className={`min-h-screen font-sans transition-colors duration-300 ${darkMode ? 'bg-gray-900 text-white' : 'bg-gray-50 text-gray-900'}`}>
@@ -413,8 +457,3 @@ const Payment = () => {
 };
 
 export default Payment;
-
-
-
-
-
