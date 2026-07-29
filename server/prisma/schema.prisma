@@ -26,7 +26,8 @@ model User {
   status            String                @default("active")
   sessions          Session[]
   documents     Document[]
-  verificationToken String?               @unique
+  personalTasks     PersonalTask[]
+  verificationToken String?               @unique               @unique
 
   username          String?               @unique
   phone             String?
@@ -231,4 +232,15 @@ model Document {
   uploader   User         @relation(fields: [uploaderId], references: [id])
   createdAt  DateTime     @default(now())
   updatedAt  DateTime     @updatedAt
+}
+  model PersonalTask {
+  id        String    @id @default(uuid())
+  title     String
+  status    String    @default("TODO") 
+  priority  String    @default("MEDIUM") 
+  dueDate   DateTime?
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 }

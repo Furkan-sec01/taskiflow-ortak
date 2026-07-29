@@ -1,120 +1,138 @@
-import toast from "react-hot-toast";
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { useTheme } from "../context/ThemeContext"; 
+import { useTheme } from "../context/ThemeContext";
 import { Plus, X, Flag, CheckCircle, Clock, Trash2 } from "lucide-react";
 
-// Görev Tipi Tanımı
+const API_BASE = "http://localhost:5000";
+
+// Görev Tipi Tanımı (backend: PersonalTask)
 interface Task {
-  id: number;
+  id: string;
   title: string;
   status: string; // "TODO" | "DONE"
   priority: string; // "LOW" | "MEDIUM" | "HIGH"
-  dueDate: string;
+  dueDate: string | null;
 }
 
 const Tasks = () => {
   const { darkMode } = useTheme();
   const navigate = useNavigate();
-  
+
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [currentUser, setCurrentUser] = useState<any>(null);
-  
+  const [loadingList, setLoadingList] = useState(true);
+  const [listError, setListError] = useState("");
+
   // Modal ve Form State'leri
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newTask, setNewTask] = useState({ title: "", date: "", time: "", priority: "MEDIUM" });
   const [isLoading, setIsLoading] = useState(false);
 
+  const authHeaders = () => ({ Authorization: `Bearer ${localStorage.getItem("token")}` });
+
   useEffect(() => {
-    const storedUser = localStorage.getItem("user");
-    if (!storedUser) {
-      navigate("/login"); 
+    const token = localStorage.getItem("token");
+    if (!token) {
+      navigate("/login");
       return;
     }
-    const user = JSON.parse(storedUser);
-    setCurrentUser(user);
-    fetchTasks(user.id);
+    fetchTasks();
   }, []);
 
-  const fetchTasks = async (userId: number) => {
-    const token = localStorage.getItem("token");
+  const fetchTasks = async () => {
+    setLoadingList(true);
+    setListError("");
     try {
-      const res = await fetch(`http://127.0.0.1:5000/api/tasks?userId=${userId}`, {
-        headers: { "Authorization": `Bearer ${token}` }
+      const res = await fetch(`${API_BASE}/api/personal-tasks`, {
+        headers: authHeaders(),
       });
       const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Görevler yüklenemedi.");
       setTasks(Array.isArray(data) ? data : []);
-    } catch (error) { 
-      console.error("Hata:", error);
+    } catch (error) {
+      setListError(error instanceof Error ? error.message : "Bir hata oluştu.");
       setTasks([]);
+    } finally {
+      setLoadingList(false);
     }
   };
 
-  const handleDelete = async (id: number) => {
+  const handleDelete = async (id: string) => {
     if (!confirm("Bu görevi silmek istediğine emin misin?")) return;
-    const token = localStorage.getItem("token");
-    await fetch(`http://127.0.0.1:5000/api/tasks/${id}`, { 
-      method: "DELETE",
-      headers: { "Authorization": `Bearer ${token}` }
-    });
-    if (currentUser) fetchTasks(currentUser.id);
+    try {
+      const res = await fetch(`${API_BASE}/api/personal-tasks/${id}`, {
+        method: "DELETE",
+        headers: authHeaders(),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Görev silinemedi.");
+      setTasks((prev) => prev.filter((t) => t.id !== id));
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Bir hata oluştu.");
+    }
   };
 
-  const handleStatusChange = async (id: number, currentStatus: string) => {
+  const handleStatusChange = async (id: string, currentStatus: string) => {
     const newStatus = currentStatus === "DONE" ? "TODO" : "DONE";
-    const token = localStorage.getItem("token");
-    await fetch(`http://127.0.0.1:5000/api/tasks/${id}`, {
-      method: "PUT", 
-      headers: { 
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${token}`
-      }, 
-      body: JSON.stringify({ status: newStatus }),
-    });
-    if (currentUser) fetchTasks(currentUser.id);
+    try {
+      const res = await fetch(`${API_BASE}/api/personal-tasks/${id}/status`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          ...authHeaders(),
+        },
+        body: JSON.stringify({ status: newStatus }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Durum güncellenemedi.");
+      setTasks((prev) => prev.map((t) => (t.id === id ? data : t)));
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Bir hata oluştu.");
+    }
   };
 
   const handleAddTask = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newTask.title || !currentUser) return;
+    if (!newTask.title.trim()) return;
     setIsLoading(true);
     try {
-      const token = localStorage.getItem("token");
-      const res = await fetch("http://127.0.0.1:5000/api/tasks", {
-        method: "POST", 
-        headers: { 
+      // Tarih + saat birleştirilip dueDate olarak gönderiliyor
+      const dueDate = newTask.date
+        ? new Date(`${newTask.date}T${newTask.time || "00:00"}`).toISOString()
+        : null;
+
+      const res = await fetch(`${API_BASE}/api/personal-tasks`, {
+        method: "POST",
+        headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`
-        }, 
-        body: JSON.stringify({ 
+          ...authHeaders(),
+        },
+        body: JSON.stringify({
           title: newTask.title,
           priority: newTask.priority,
-          date: newTask.date,
-          userId: currentUser.id 
+          dueDate,
         }),
       });
-      if (res.ok) { 
-        await fetchTasks(currentUser.id); 
-        setIsModalOpen(false); 
-        setNewTask({ title: "", date: "", time: "", priority: "MEDIUM" }); 
-      } else {
-        const err = await res.json();
-        toast.error(err.error || "Sunucu hatası");
-      }
-    } catch (error) { 
-      toast.error("Hata oluştu."); 
-    } finally { 
-      setIsLoading(false); 
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Görev oluşturulamadı.");
+
+      setTasks((prev) => [...prev, data]);
+      setIsModalOpen(false);
+      setNewTask({ title: "", date: "", time: "", priority: "MEDIUM" });
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Bir hata oluştu.");
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const getStatusLabel = (status: string) => status === "DONE" ? "Tamamlandı" : "Bekliyor";
-  const getPriorityLabel = (p: string) => p === "HIGH" ? "Yüksek" : p === "MEDIUM" ? "Orta" : "Düşük";
-  const getPriorityBadgeColor = (p: string) => p === "HIGH" ? "bg-red-50 text-red-600" : p === "MEDIUM" ? "bg-orange-50 text-orange-600" : "bg-green-50 text-green-600";
+  const getStatusLabel = (status: string) => (status === "DONE" ? "Tamamlandı" : "Bekliyor");
+  const getPriorityLabel = (p: string) => (p === "HIGH" ? "Yüksek" : p === "MEDIUM" ? "Orta" : "Düşük");
+  const getPriorityBadgeColor = (p: string) =>
+    p === "HIGH" ? "bg-red-50 text-red-600" : p === "MEDIUM" ? "bg-orange-50 text-orange-600" : "bg-green-50 text-green-600";
 
   return (
     <div className={`flex h-screen font-sans transition-colors duration-300 ${darkMode ? 'bg-gray-900 text-gray-100' : 'bg-[#F3F4F6] text-gray-800'}`}>
-      
+
       {/* YENİ GÖREV MODALI */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
@@ -126,44 +144,44 @@ const Tasks = () => {
             <form onSubmit={handleAddTask} className="space-y-5">
               <div>
                 <label className="block text-sm font-semibold mb-2">Görev Adı</label>
-                <input 
-                  type="text" 
-                  required 
-                  placeholder="Yapılacak iş..." 
-                  className={`w-full px-4 py-3 rounded-xl border outline-none ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-200'}`} 
-                  value={newTask.title} 
-                  onChange={(e) => setNewTask({...newTask, title: e.target.value})} 
+                <input
+                  type="text"
+                  required
+                  placeholder="Yapılacak iş..."
+                  className={`w-full px-4 py-3 rounded-xl border outline-none ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-200'}`}
+                  value={newTask.title}
+                  onChange={(e) => setNewTask({...newTask, title: e.target.value})}
                 />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-semibold mb-2">Tarih</label>
-                  <input 
-                    type="date" 
-                    className={`w-full px-4 py-3 rounded-xl border outline-none ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-200'}`} 
-                    value={newTask.date} 
-                    onChange={(e) => setNewTask({...newTask, date: e.target.value})} 
+                  <input
+                    type="date"
+                    className={`w-full px-4 py-3 rounded-xl border outline-none ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-200'}`}
+                    value={newTask.date}
+                    onChange={(e) => setNewTask({...newTask, date: e.target.value})}
                   />
                 </div>
                 <div>
                   <label className="block text-sm font-semibold mb-2">Saat</label>
-                  <input 
-                    type="time" 
-                    className={`w-full px-4 py-3 rounded-xl border outline-none ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-200'}`} 
-                    value={newTask.time} 
-                    onChange={(e) => setNewTask({...newTask, time: e.target.value})} 
+                  <input
+                    type="time"
+                    className={`w-full px-4 py-3 rounded-xl border outline-none ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-200'}`}
+                    value={newTask.time}
+                    onChange={(e) => setNewTask({...newTask, time: e.target.value})}
                   />
                 </div>
               </div>
               <div className="flex gap-3">
                 {[
-                  { val: 'LOW', label: 'Düşük' }, 
-                  { val: 'MEDIUM', label: 'Orta' }, 
+                  { val: 'LOW', label: 'Düşük' },
+                  { val: 'MEDIUM', label: 'Orta' },
                   { val: 'HIGH', label: 'Yüksek' }
                 ].map((p) => (
-                  <button 
-                    key={p.val} 
-                    type="button" 
+                  <button
+                    key={p.val}
+                    type="button"
                     onClick={() => setNewTask({...newTask, priority: p.val})}
                     className={`flex-1 py-2.5 rounded-xl text-sm font-bold border flex items-center justify-center gap-2 ${newTask.priority === p.val ? 'bg-blue-100 text-blue-600 border-blue-200' : (darkMode ? 'bg-gray-700 border-gray-600' : 'bg-white border-gray-200')}`}
                   >
@@ -171,9 +189,9 @@ const Tasks = () => {
                   </button>
                 ))}
               </div>
-              <button 
-                type="submit" 
-                disabled={isLoading} 
+              <button
+                type="submit"
+                disabled={isLoading}
                 className="w-full py-3 rounded-xl bg-blue-600 text-white font-bold hover:bg-blue-700 transition-all shadow-lg"
               >
                 {isLoading ? "Ekleniyor..." : "Görevi Ekle"}
@@ -187,13 +205,15 @@ const Tasks = () => {
       <main className="flex-1 p-8 overflow-y-auto">
         <div className="flex justify-between items-center mb-6">
           <h1 className={`text-3xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>Tüm Görevlerim</h1>
-          <button 
-            onClick={() => setIsModalOpen(true)} 
+          <button
+            onClick={() => setIsModalOpen(true)}
             className="bg-blue-600 text-white px-5 py-2.5 rounded-full font-bold shadow-lg flex gap-2 hover:bg-blue-700 transition-colors"
           >
             <Plus size={20}/> Yeni Görev
           </button>
         </div>
+
+        {listError && <p className="text-sm text-red-500 mb-4">{listError}</p>}
 
         <div className={`rounded-3xl shadow-sm border overflow-hidden transition-colors ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-100'}`}>
           <table className="w-full text-left">
@@ -206,7 +226,11 @@ const Tasks = () => {
               </tr>
             </thead>
             <tbody className={`divide-y ${darkMode ? 'divide-gray-700' : 'divide-gray-100'}`}>
-              {tasks.length > 0 ? tasks.map((task) => (
+              {loadingList ? (
+                <tr>
+                  <td colSpan={4} className="p-10 text-center text-gray-400">Yükleniyor...</td>
+                </tr>
+              ) : tasks.length > 0 ? tasks.map((task) => (
                 <tr key={task.id} className={`transition-colors ${darkMode ? 'hover:bg-gray-700/50' : 'hover:bg-gray-50'}`}>
                   <td className={`p-5 font-medium ${task.status === 'DONE' ? 'line-through opacity-50' : ''} ${darkMode ? 'text-gray-200' : 'text-gray-800'}`}>
                     {task.title}
@@ -222,16 +246,16 @@ const Tasks = () => {
                     </span>
                   </td>
                   <td className="p-5 text-right flex justify-end gap-2">
-                    <button 
-                      onClick={() => handleStatusChange(task.id, task.status)} 
-                      className={`p-2 rounded-lg transition-colors ${task.status === 'DONE' ? 'bg-yellow-50 text-yellow-600 hover:bg-yellow-100' : 'bg-green-50 text-green-600 hover:bg-green-100'}`} 
+                    <button
+                      onClick={() => handleStatusChange(task.id, task.status)}
+                      className={`p-2 rounded-lg transition-colors ${task.status === 'DONE' ? 'bg-yellow-50 text-yellow-600 hover:bg-yellow-100' : 'bg-green-50 text-green-600 hover:bg-green-100'}`}
                       title="Durumu Değiştir"
                     >
                       <CheckCircle size={18} />
                     </button>
-                    <button 
-                      onClick={() => handleDelete(task.id)} 
-                      className="p-2 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-colors" 
+                    <button
+                      onClick={() => handleDelete(task.id)}
+                      className="p-2 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-colors"
                       title="Sil"
                     >
                       <Trash2 size={18} />
