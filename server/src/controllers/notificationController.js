@@ -38,8 +38,15 @@ exports.respondToInvıte = async (req, res) => {
 
     try{
         const invitation = await prisma.notification.findUnique({
-            where: {id: notificationId},
-        });
+    where: { id: notificationId },
+    include: {
+        organization: {
+            select: {
+                name: true,
+            },
+        },
+    },
+});
 
         if(!invitation || invitation.type !== "INVITE"){
             return res.status(404).json({ error: "Geçerli bir davet kaydı bulunamadı." });
@@ -51,6 +58,7 @@ exports.respondToInvıte = async (req, res) => {
         }
 
         if(action === "ACCEPT"){
+          console.log(invitation);
             await prisma.$transaction(async (tx) => {
                 const isAlreadyMember = await tx.user_Organization.findUnique({
                     where: {
@@ -61,26 +69,46 @@ exports.respondToInvıte = async (req, res) => {
                     }
                 });
 
-                if(!isAlreadyMember){
-                    await tx.user_Organization.create({
-                        data: {
-                            userId: currentUserId,
-                            organizationId: invitation.organizationId,
-                            role: "MEMBER"
-                        }
-                    });
-                }
+              if(!isAlreadyMember){
 
-                await tx.notification.delete({
-                    where: { id: notificationId }
-                });
-            });
+    console.log("MEMBER EKLENİYOR");
+    console.log("currentUserId:", currentUserId);
+    console.log("organizationId:", invitation.organizationId);
 
-        }else if (action === "REJECT"){
-            await prisma.notification.delete({
-                where: { id: notificationId }
-            });
+    await tx.user_Organization.create({
+        data: {
+            userId: currentUserId,
+            organizationId: invitation.organizationId,
+            role: "MEMBER"
         }
+    });
+
+    console.log("MEMBER EKLENDİ");
+}
+
+  await tx.notification.update({
+    where: { id: notificationId },
+    data: {
+        isRead: true,
+        type: "success",
+        title: "Davet Kabul Edildi",
+        message: `${invitation.organization?.name} ekibi davetini kabul ettiniz.`
+    }
+});
+            });
+}else if(action === "REJECT"){
+
+await prisma.notification.update({
+    where: { id: notificationId },
+    data: {
+        isRead: true,
+        type: "alert",
+        title: "Davet Reddedildi",
+        message: `${invitation.organization?.name} ekibi davetini reddettiniz.`
+    }
+});
+
+}
 
 
         return res.json({
