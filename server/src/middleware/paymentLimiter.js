@@ -5,6 +5,7 @@ const paymentLimiter = rateLimit({
   max: 5,
   standardHeaders: true,
   legacyHeaders: false,
+  keyGenerator: (req) => req.user?.id || req.user?.userId || req.ip,
   message: { message: "Çok fazla ödeme denemesi yaptınız. Lütfen birkaç dakika sonra tekrar deneyin." },
 });
 

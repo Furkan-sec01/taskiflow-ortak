@@ -443,8 +443,9 @@ function CyclePanel({ tasks, dark }: { tasks: ApiTask[]; dark: boolean }) {
   const cp = chartProps(dark);
   const completed = useMemo(() => tasks
     .filter((t) => t.isCompleted && t.completedAt)
-    .map((t) => ({ title: t.title, cycleTime: Math.max(0, daysBetween(new Date(t.completedAt!), new Date(t.createdAt))) }))
-    .slice(-30), [tasks]);
+    .map((t) => ({ title: t.title, completedAt: t.completedAt!, cycleTime: Math.max(0, daysBetween(new Date(t.completedAt!), new Date(t.createdAt))) }))
+    .sort((a, b) => new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime())
+    .slice(0, 30), [tasks]);
 
   if (completed.length === 0) {
     return <SectionCard title="Cycle Time"><EmptyState text="Henüz tamamlanmış görev yok, cycle time hesaplanamıyor." /></SectionCard>;

@@ -214,10 +214,22 @@ useEffect(() => {
     return name[0].toUpperCase();
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("activeOrgId");
-    navigate("/login");
+  const handleLogout = async () => {
+    const token = localStorage.getItem("token");
+    try {
+      if (token) {
+        await fetch("http://localhost:5000/api/auth/logout", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+        });
+      }
+    } catch (err) {
+      console.error("Logout isteği başarısız (yine de çıkış yapılıyor):", err);
+    } finally {
+      localStorage.removeItem("token");
+      localStorage.removeItem("activeOrgId");
+      navigate("/login");
+    }
   };
 
   const toggle = (key: string) => setCollapsed(p => ({ ...p, [key]: !p[key] }));
