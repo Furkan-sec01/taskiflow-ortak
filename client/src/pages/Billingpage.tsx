@@ -1,4 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+
+const API_BASE = "http://localhost:5000";
 
 /* ── Types ── */
 type PlanKey = "starter" | "pro" | "corp";
@@ -38,6 +41,55 @@ interface Plan {
   };
   usage: UsageStat[];
   invoices: Invoice[];
+}
+
+/* ── Backend <-> UI eşlemesi ve yardımcılar ── */
+const PLAN_KEY_MAP: Record<string, PlanKey> = {
+  FREE: "starter",
+  PRO: "pro",
+  BUSINESS: "corp",
+};
+
+function formatDate(dateStr: string | null): string {
+  if (!dateStr) return "—";
+  try {
+    return new Date(dateStr).toLocaleDateString("tr-TR", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    });
+  } catch {
+    return "—";
+  }
+}
+
+function formatAmount(amount: number): string {
+  return `₺${amount.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function statusLabel(status: string): { label: string; className: string } {
+  switch (status) {
+    case "PAID":
+      return { label: "Ödendi", className: "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300" };
+    case "PENDING":
+      return { label: "Beklemede", className: "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300" };
+    case "FAILED":
+      return { label: "Başarısız", className: "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300" };
+    case "REFUNDED":
+      return { label: "İade Edildi", className: "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300" };
+    default:
+      return { label: status, className: "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300" };
+  }
+}
+
+interface RealPayment {
+  id: string;
+  amount: number;
+  plan?: string | null;
+  currency: string;
+  status: string;
+  createdAt: string;
+  description?: string | null;
 }
 
 /* ── Data ── */
@@ -212,8 +264,46 @@ function UsageCard({ stat }: { stat: UsageStat }) {
 
 /* ── BillingPage ── */
 export default function BillingPage() {
+  const navigate = useNavigate();
   const [active, setActive] = useState<PlanKey>("starter");
+  const [loading, setLoading] = useState(true);
+  const [realPlan, setRealPlan] = useState<string>("FREE");
+  const [realStartDate, setRealStartDate] = useState<string | null>(null);
+  const [realEndDate, setRealEndDate] = useState<string | null>(null);
+  const [realPayments, setRealPayments] = useState<RealPayment[]>([]);
+
+  useEffect(() => {
+    const fetchOverview = async () => {
+      const token = localStorage.getItem("token");
+      if (!token) {
+        setLoading(false);
+        return;
+      }
+      try {
+        const res = await fetch(`${API_BASE}/api/payments/overview`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || "Fatura bilgileri alınamadı.");
+
+        const planCode = data.subscription?.plan || "FREE";
+        setRealPlan(planCode);
+        setRealStartDate(data.subscription?.startDate || null);
+        setRealEndDate(data.subscription?.endDate || null);
+        setRealPayments(data.payments || []);
+        setActive(PLAN_KEY_MAP[planCode] || "starter");
+      } catch (err) {
+        console.error("Billing overview çekilemedi:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchOverview();
+  }, []);
+
   const plan = plans.find((p) => p.key === active)!;
+  const isCurrentPlan = active === (PLAN_KEY_MAP[realPlan] || "starter");
 
   return (
     <div className="min-h-screen bg-[#f0f4f9] dark:bg-gray-900 p-8">
@@ -221,7 +311,9 @@ export default function BillingPage() {
       {/* Page Header */}
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-1">Billing</h1>
-        <p className="text-sm text-gray-500 dark:text-gray-400">Planınızı görüntüleyin, yönetin ve yükseltin.</p>
+        <p className="text-sm text-gray-500 dark:text-gray-400">
+          {loading ? "Fatura bilgileriniz getiriliyor..." : "Planınızı görüntüleyin, yönetin ve yükseltin."}
+        </p>
       </div>
 
       {/* Tabs */}
@@ -252,8 +344,14 @@ export default function BillingPage() {
           {/* Head */}
           <div className="flex items-start justify-between mb-5">
             <div>
-              <span className={`inline-flex items-center text-[11px] font-semibold px-3 py-1 rounded-full mb-3 ${plan.badgeStyle}`}>
-                {plan.badge}
+              <span
+                className={`inline-flex items-center text-[11px] font-semibold px-3 py-1 rounded-full mb-3 ${
+                  isCurrentPlan
+                    ? "bg-green-50 text-green-600 border border-green-200 dark:bg-green-900/20 dark:text-green-300 dark:border-green-800"
+                    : plan.badgeStyle
+                }`}
+              >
+                {isCurrentPlan ? "✓ Aktif Planınız" : plan.badge}
               </span>
               <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{plan.label}</h2>
             </div>
@@ -289,15 +387,21 @@ export default function BillingPage() {
               <>
                 <div>
                   <p className="text-[10px] uppercase tracking-wider text-gray-400 dark:text-gray-500 font-semibold mb-0.5">Plan Başlangıcı</p>
-                  <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">{plan.key === "starter" ? "14 Oca 2025" : "—"}</p>
+                  <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                    {isCurrentPlan && realStartDate ? formatDate(realStartDate) : "—"}
+                  </p>
                 </div>
                 <div>
                   <p className="text-[10px] uppercase tracking-wider text-gray-400 dark:text-gray-500 font-semibold mb-0.5">Sonraki Ödeme</p>
-                  <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">{plan.key === "starter" ? "—" : "1 Nis 2025"}</p>
+                  <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                    {isCurrentPlan ? (realEndDate ? formatDate(realEndDate) : "Süresiz") : "—"}
+                  </p>
                 </div>
                 <div>
                   <p className="text-[10px] uppercase tracking-wider text-gray-400 dark:text-gray-500 font-semibold mb-0.5">Fatura Yöntemi</p>
-                  <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">{plan.key === "starter" ? "—" : "Kredi Kartı"}</p>
+                  <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                    {isCurrentPlan && realPlan !== "FREE" ? "Kredi Kartı" : "—"}
+                  </p>
                 </div>
               </>
             )}
@@ -344,7 +448,7 @@ export default function BillingPage() {
               {plan.hint.text}
             </p>
             <button
-              onClick={() => plan.hint.target && setActive(plan.hint.target)}
+              onClick={() => navigate(plan.key === "corp" ? "/contact" : "/plans")}
               className={`shrink-0 text-sm font-semibold px-5 py-2.5 rounded-xl transition-colors cursor-pointer ${plan.hint.btnStyle}`}
             >
               {plan.hint.btnLabel}
@@ -375,23 +479,39 @@ export default function BillingPage() {
             </tr>
           </thead>
           <tbody>
-            {plan.invoices.map((inv, i) => (
-              <tr key={i} className="border-b border-gray-50 dark:border-gray-700 last:border-0 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-                <td className="px-5 py-3.5 text-sm text-gray-600 dark:text-gray-300">{inv.date}</td>
-                <td className="px-5 py-3.5 text-sm text-gray-600 dark:text-gray-300">{inv.description}</td>
-                <td className="px-5 py-3.5 text-sm font-medium text-gray-800 dark:text-gray-200">{inv.amount}</td>
-                <td className="px-5 py-3.5">
-                  <span className="bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 text-[10px] font-bold px-2.5 py-1 rounded-full">
-                    {inv.status}
-                  </span>
-                </td>
-                <td className="px-5 py-3.5">
-                  <button className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium cursor-pointer transition-colors">
-                    İndir
-                  </button>
+            {realPayments.length === 0 && (
+              <tr>
+                <td colSpan={5} className="px-5 py-6 text-sm text-center text-gray-400 dark:text-gray-500">
+                  {loading ? "Yükleniyor..." : "Henüz bir ödeme kaydınız yok."}
                 </td>
               </tr>
-            ))}
+            )}
+            {realPayments.map((pmt) => {
+              const s = statusLabel(pmt.status);
+              return (
+                <tr key={pmt.id} className="border-b border-gray-50 dark:border-gray-700 last:border-0 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                  <td className="px-5 py-3.5 text-sm text-gray-600 dark:text-gray-300">{formatDate(pmt.createdAt)}</td>
+                  <td className="px-5 py-3.5 text-sm text-gray-600 dark:text-gray-300">
+                    {pmt.description || (pmt.plan ? `${pmt.plan} Plan Aboneliği` : "Ödeme")}
+                  </td>
+                  <td className="px-5 py-3.5 text-sm font-medium text-gray-800 dark:text-gray-200">{formatAmount(pmt.amount)}</td>
+                  <td className="px-5 py-3.5">
+                    <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${s.className}`}>
+                      {s.label}
+                    </span>
+                  </td>
+                  <td className="px-5 py-3.5">
+                    <button
+                      disabled
+                      title="Fatura indirme özelliği yakında eklenecek."
+                      className="text-sm text-gray-300 dark:text-gray-600 font-medium cursor-not-allowed"
+                    >
+                      İndir
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>

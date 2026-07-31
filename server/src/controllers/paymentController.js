@@ -43,6 +43,25 @@ const expireOldPendingPayments = async (userId = null) => {
   });
 };
 
+const expireOldSubscriptions = async (userId = null) => {
+  const now = new Date();
+
+  await prisma.subscription.updateMany({
+    where: {
+      status: "ACTIVE",
+      endDate: {
+        not: null,
+        lt: now,
+      },
+      ...(userId ? { userId } : {}),
+    },
+    data: {
+      status: "EXPIRED",
+      plan: "FREE",
+    },
+  });
+};
+
 const getBillingOverview = async (req, res) => {
   try {
     const userId = getUserId(req);
@@ -52,6 +71,7 @@ const getBillingOverview = async (req, res) => {
     }
 
     await expireOldPendingPayments(userId);
+    await expireOldSubscriptions(userId);
 
     let subscription = await prisma.subscription.findFirst({
       where: {
@@ -394,13 +414,15 @@ const initialize3DSPayment = async (req, res) => {
 };
 
 const complete3DSPayment = async (req, res) => {
+  const FRONTEND_URL = (process.env.FRONTEND_URL || "http://localhost:5173").split(",")[0].trim();
+
   try {
     console.log("IYZICO CALLBACK BODY:", req.body);
 
     const { conversationId, paymentId, conversationData, status } = req.body;
 
     if (!conversationId || !paymentId) {
-      return res.status(400).send("Eksik callback bilgisi.");
+      return res.redirect(`${FRONTEND_URL}/plans?paymentError=missing_callback`);
     }
 
     const payment = await prisma.payment.findUnique({
@@ -408,7 +430,7 @@ const complete3DSPayment = async (req, res) => {
     });
 
     if (!payment) {
-      return res.status(404).send("Payment not found");
+      return res.redirect(`${FRONTEND_URL}/plans?paymentError=not_found`);
     }
 
     if (status !== "success") {
@@ -420,7 +442,7 @@ const complete3DSPayment = async (req, res) => {
         },
       });
 
-      return res.send("Ödeme doğrulaması başarısız.");
+      return res.redirect(`${FRONTEND_URL}/plans?paymentError=verification_failed`);
     }
 
     const authRequest = {
@@ -443,7 +465,7 @@ const complete3DSPayment = async (req, res) => {
           },
         });
 
-        return res.send("Ödeme tamamlanamadı.");
+        return res.redirect(`${FRONTEND_URL}/plans?paymentError=auth_failed`);
       }
 
       await prisma.payment.update({
@@ -461,32 +483,38 @@ const complete3DSPayment = async (req, res) => {
 
       console.log("PLAN:", payment.plan);
 
+      const finalPlan = payment.plan || getPlanFromAmount(payment.amount);
+      const periodEnd = new Date();
+      periodEnd.setDate(periodEnd.getDate() + 30);
+
       if (existingSub) {
         await prisma.subscription.update({
           where: { id: existingSub.id },
           data: {
-            
-            
-            plan: payment.plan || getPlanFromAmount(payment.amount),
+            plan: finalPlan,
             status: "ACTIVE",
-            endDate: null,
+            startDate: new Date(),
+            endDate: periodEnd,
           },
         });
       } else {
         await prisma.subscription.create({
           data: {
             userId: payment.userId,
-            plan: payment.plan || getPlanFromAmount(payment.amount),
+            plan: finalPlan,
             status: "ACTIVE",
+            endDate: periodEnd,
           },
         });
       }
 
-      return res.send("OK");
+      return res.redirect(
+        `${FRONTEND_URL}/payment-success?plan=${encodeURIComponent(finalPlan)}&price=${encodeURIComponent(payment.amount)}`
+      );
     });
   } catch (error) {
     console.error("3D ödeme tamamlama hatası:", error);
-    return res.status(500).send("ERROR");
+    return res.redirect(`${FRONTEND_URL}/plans?paymentError=server_error`);
   }
 };
 
@@ -547,6 +575,7 @@ const getPaymentHistory = async (req, res) => {
     }
 
     await expireOldPendingPayments(userId);
+    await expireOldSubscriptions(userId);
 
     const payments = await prisma.payment.findMany({
       where: { userId },
@@ -568,4 +597,5 @@ module.exports = {
   initialize3DSPayment,
   complete3DSPayment,
   cancelSubscription,
+  expireOldSubscriptions,
 };
