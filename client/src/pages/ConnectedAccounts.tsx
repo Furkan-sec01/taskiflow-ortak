@@ -1,5 +1,6 @@
 import toast from "react-hot-toast";
 import React, { useEffect, useState } from "react";
+import { API_BASE } from "../config/api";
 
 type SessionItem = {
   id: string;
@@ -19,7 +20,7 @@ const ConnectedAccounts: React.FC = () => {
     setError("");
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch("http://localhost:5000/api/sessions", {
+      const res = await fetch(`${API_BASE}/api/sessions`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();
@@ -39,7 +40,7 @@ const ConnectedAccounts: React.FC = () => {
   const handleLogout = async (sessionId: string) => {
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch(`http://localhost:5000/api/sessions/${sessionId}`, {
+      const res = await fetch(`${API_BASE}/api/sessions/${sessionId}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
       });

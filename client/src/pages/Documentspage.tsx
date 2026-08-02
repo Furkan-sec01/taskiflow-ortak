@@ -21,11 +21,11 @@ import {
   Upload,
   FolderOpen,
 } from "lucide-react";
+import { API_BASE } from "../config/api";
 
 type ViewMode = "grid" | "list";
 type FilterType = "all" | "starred" | "recent";
 
-const API_BASE = "http://localhost:5000";
 
 export interface PersonalDocument {
   id: string;

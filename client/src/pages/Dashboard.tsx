@@ -18,6 +18,7 @@ import {
   RadialBarChart, RadialBar, ResponsiveContainer, PolarAngleAxis
 
 } from 'recharts';
+import { API_BASE } from "../config/api";
 
 
 
@@ -85,7 +86,7 @@ const Dashboard = () => {
 
     try {
 
-      const res = await fetch("http://localhost:5000/api/organizations", {
+      const res = await fetch(`${API_BASE}/api/organizations`, {
 
         headers: { "Authorization": `Bearer ${token}` }
 
@@ -123,7 +124,7 @@ const Dashboard = () => {
 
     try {
 
-      const response = await fetch("http://localhost:5000/api/project/my-projects", {
+      const response = await fetch(`${API_BASE}/api/project/my-projects`, {
 
         method: "GET",
 
@@ -177,7 +178,7 @@ const Dashboard = () => {
 
     try {
 
-      const res = await fetch("http://localhost:5000/api/project", {
+      const res = await fetch(`${API_BASE}/api/project`, {
 
         method: "POST",
 

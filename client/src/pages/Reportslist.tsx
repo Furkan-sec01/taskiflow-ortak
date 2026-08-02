@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import {
   BarChart2, ChevronRight, Building2,
 } from "lucide-react";
+import { API_BASE } from "../config/api";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 interface Project {
@@ -35,7 +36,7 @@ export default function ReportsList() {
     setError("");
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch("http://localhost:5000/api/project/my-projects", {
+      const res = await fetch(`${API_BASE}/api/project/my-projects`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();

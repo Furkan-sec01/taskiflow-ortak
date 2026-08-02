@@ -5,11 +5,11 @@ import {
   Trash2, Edit3, Eye, Grid3X3, List, Star, StarOff,
   Clock, Upload, FolderOpen, File, FileSpreadsheet, Presentation, Image,
 } from "lucide-react";
+import { API_BASE } from "../config/api";
 
 type ViewMode = "grid" | "list";
 type FilterType = "all" | "starred" | "recent";
 
-const API_BASE = "http://localhost:5000";
 
 export interface OrgDocument {
   id: string;

@@ -1,6 +1,7 @@
 import toast from "react-hot-toast";
 import { useState, useEffect } from "react";
 import { Lock, Shield, Monitor, Smartphone, AlertTriangle, Eye, EyeOff } from "lucide-react";
+import { API_BASE } from "../config/api";
 
 interface ToggleProps {
   enabled: boolean;
@@ -101,14 +102,14 @@ export default function SecurityPage() {
   useEffect(() => {
     const token = localStorage.getItem("token");
 
-    fetch("http://localhost:5000/api/sessions", {
+    fetch(`${API_BASE}/api/sessions`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((res) => res.json())
       .then((data) => setSessions(Array.isArray(data) ? data : []))
       .catch(() => setSessions([]));
 
-    fetch("http://localhost:5000/api/users/me", {
+    fetch(`${API_BASE}/api/users/me`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((res) => res.json())
@@ -129,7 +130,7 @@ export default function SecurityPage() {
 
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch("http://localhost:5000/api/users/change-password", {
+      const res = await fetch(`${API_BASE}/api/users/change-password`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -162,7 +163,7 @@ export default function SecurityPage() {
   const handleTerminateSession = async (sessionId: string) => {
     const token = localStorage.getItem("token");
     try {
-      const res = await fetch(`http://localhost:5000/api/sessions/${sessionId}`, {
+      const res = await fetch(`${API_BASE}/api/sessions/${sessionId}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -176,7 +177,7 @@ export default function SecurityPage() {
   const handleTerminateAllOthers = async () => {
     const token = localStorage.getItem("token");
     try {
-      const res = await fetch("http://localhost:5000/api/sessions/others", {
+      const res = await fetch(`${API_BASE}/api/sessions/others`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
       });

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { API_BASE } from "../config/api";
 
 interface Member {
   id: string;
@@ -125,7 +126,7 @@ const Projelerim: React.FC = () => {
         if (!token) throw new Error("Giriş yapmanız gerekiyor.");
 
         const response = await fetch(
-          "http://localhost:5000/api/project/my-projects",
+          `${API_BASE}/api/project/my-projects`,
           {
             method: "GET",
             headers: {

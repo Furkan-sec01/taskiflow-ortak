@@ -11,6 +11,7 @@ import {
   BarChart2,
   Zap, Layers, GitMerge, PieChart as PieIcon, Clock, X, Moon, Sun,
 } from "lucide-react";
+import { API_BASE } from "../config/api";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 type Status = "done" | "progress" | "todo" | "blocked";
@@ -625,7 +626,7 @@ export default function Reports() {
     if (!projectId) return;
     const token = localStorage.getItem("token");
 
-    fetch(`http://localhost:5000/api/project/${projectId}/board`, {
+    fetch(`${API_BASE}/api/project/${projectId}/board`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((res) => res.json())

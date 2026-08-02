@@ -9,6 +9,7 @@ import {
   Sparkles,
   Loader2,
 } from "lucide-react";
+import { API_BASE } from "../config/api";
 
 type TemplateDesign = {
   boardBg: string;
@@ -80,7 +81,7 @@ const TemplatesPage: React.FC = () => {
       setLoadingId(template.id);
 
       // Önce kullanıcının ekiplerini (organizasyonlarını) çekiyoruz
-      const orgsRes = await fetch("http://localhost:5000/api/organizations", {
+      const orgsRes = await fetch(`${API_BASE}/api/organizations`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const orgs = await orgsRes.json();
@@ -94,7 +95,7 @@ const TemplatesPage: React.FC = () => {
       const organizationId = orgs[0].id;
 
       const response = await fetch(
-        "http://localhost:5000/api/project",
+        `${API_BASE}/api/project`,
         {
           method: "POST",
           headers: {

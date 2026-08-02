@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import jsPDF from "jspdf";
+import { API_BASE } from "../config/api";
 
 interface Member {
   id: string;
@@ -33,7 +34,7 @@ const ExportProjects: React.FC = () => {
         const token = localStorage.getItem("token");
         if (!token) throw new Error("Giriş yapmanız gerekiyor.");
 
-        const response = await fetch("http://localhost:5000/api/project/my-projects", {
+        const response = await fetch(`${API_BASE}/api/project/my-projects`, {
           headers: {
             Authorization: `Bearer ${token}`,
             "Content-Type": "application/json",

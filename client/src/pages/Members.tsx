@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { Users, Mail, Shield, Crown, Search, Moon, Sun } from "lucide-react";
+import { API_BASE } from "../config/api";
 
 interface Member {
   id: string;
@@ -40,7 +41,7 @@ const Members = () => {
       const orgId = user.organizationId || localStorage.getItem("activeOrgId");
 
       if (orgId) {
-        fetch(`http://localhost:5000/api/organizations/${orgId}/members`, {
+        fetch(`${API_BASE}/api/organizations/${orgId}/members`, {
           headers: { Authorization: `Bearer ${token}` }
         })
           .then(res => res.json())

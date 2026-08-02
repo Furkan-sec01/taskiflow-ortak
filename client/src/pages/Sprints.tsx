@@ -6,8 +6,8 @@ import {
 import {
   ArrowLeft, Plus, Play, CheckCircle2, Trash2, Target, Calendar, X, ListChecks,
 } from "lucide-react";
+import { API_BASE } from "../config/api";
 
-const API_BASE = "http://localhost:5000";
 
 type SprintStatus = "PLANNED" | "ACTIVE" | "COMPLETED";
 

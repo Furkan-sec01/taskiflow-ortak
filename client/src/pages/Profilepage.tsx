@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { Pencil, Upload, User, Mail, Clock } from "lucide-react";
+import { API_BASE } from "../config/api";
 
 interface ProfileData {
   fullName: string;
@@ -13,7 +14,6 @@ interface ProfileData {
   role: string;
   plan: string;
   subscriptionStatus: string;}
- const API_BASE = "http://localhost:5000";
 
 export default function ProfilePage() {
  const [editing, setEditing] = useState(false);
@@ -57,7 +57,7 @@ const [activities, setActivities] = useState<
 
   if (!token) return;
 
-  fetch("http://localhost:5000/api/users/me", {
+  fetch(`${API_BASE}/api/users/me`, {
     headers: {
       Authorization: `Bearer ${token}`,
     },
@@ -106,7 +106,7 @@ subscriptionStatus: data.subscriptionStatus || "",
     const token = localStorage.getItem("token");
 
     try {
-      const res = await fetch("http://localhost:5000/api/users/profile", {
+      const res = await fetch(`${API_BASE}/api/users/profile`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",

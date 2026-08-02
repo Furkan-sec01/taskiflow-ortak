@@ -16,6 +16,7 @@ import {
   Lock,
   FileText          // 👈 Belgeler ikonu için eklendi
 } from "lucide-react";
+import { API_BASE } from "../config/api";
 
 // DocumentsTab bileşenini proje yapınıza göre doğru yoldan import edin
 import DocumentsTab from "./Documentstab";   // 👈 Dosyanın yolu değişebilir
@@ -61,7 +62,7 @@ const OrganizationDetail = () => {
     const token = localStorage.getItem("token");
     try {
       setIsLoading(true);
-      const res = await fetch(`http://localhost:5000/api/organizations/${orgId}/members`, {
+      const res = await fetch(`${API_BASE}/api/organizations/${orgId}/members`, {
         headers: { "Authorization": `Bearer ${token}` }
       });
       const data = await res.json();
@@ -78,7 +79,7 @@ const OrganizationDetail = () => {
     const token = localStorage.getItem("token");
     try {
       setIsProjectsLoading(true);
-      const res = await fetch(`http://localhost:5000/api/project/org/${orgId}`, {
+      const res = await fetch(`${API_BASE}/api/project/org/${orgId}`, {
         headers: { "Authorization": `Bearer ${token}` }
       });
       const data = await res.json();
@@ -96,7 +97,7 @@ const OrganizationDetail = () => {
     setIsInviting(true);
     const token = localStorage.getItem("token");
     try {
-      const res = await fetch(`http://localhost:5000/api/organizations/invite`, {
+      const res = await fetch(`${API_BASE}/api/organizations/invite`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -125,7 +126,7 @@ const handleDeleteMember = async (memberId: string) => {
   const token = localStorage.getItem("token");
 
   try {
-    const res = await fetch(`http://localhost:5000/api/organizations/${orgId}/delete-member`, {
+    const res = await fetch(`${API_BASE}/api/organizations/${orgId}/delete-member`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -149,7 +150,7 @@ const handleDeleteMember = async (memberId: string) => {
   const handleLeaveTeam = async () => {
   const token = localStorage.getItem("token");
     try {
-      const res = await fetch(`http://localhost:5000/api/organizations/${orgId}/leave`, {
+      const res = await fetch(`${API_BASE}/api/organizations/${orgId}/leave`, {
         method: "POST",
         headers: { "Authorization": `Bearer ${token}` }
       });
@@ -165,7 +166,7 @@ const handleDeleteMember = async (memberId: string) => {
   const token = localStorage.getItem("token");
 
   try {
-    const res = await fetch(`http://localhost:5000/api/project/${projectId}`, {
+    const res = await fetch(`${API_BASE}/api/project/${projectId}`, {
       method: "DELETE",
       headers: {
         Authorization: `Bearer ${token}`,
@@ -193,7 +194,7 @@ const handleDeleteTeam = async () => {
   const token = localStorage.getItem("token");
 
   try {
-    const res = await fetch(`http://localhost:5000/api/organizations/${orgId}`, {
+    const res = await fetch(`${API_BASE}/api/organizations/${orgId}`, {
       method: "DELETE",
       headers: {
         Authorization: `Bearer ${token}`,
