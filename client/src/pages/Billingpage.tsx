@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 /* ── Types ── */
 type PlanKey = "starter" | "pro" | "corp";
@@ -211,9 +212,11 @@ function UsageCard({ stat }: { stat: UsageStat }) {
 }
 
 /* ── BillingPage ── */
+const CURRENT_PLAN_KEY: PlanKey = "starter";
+
 export default function BillingPage() {
-  const [active, setActive] = useState<PlanKey>("starter");
-  const plan = plans.find((p) => p.key === active)!;
+  const [view, setView] = useState<"current" | "plans">("current");
+  const plan = plans.find((p) => p.key === CURRENT_PLAN_KEY)!;
 
   return (
     <div className="min-h-screen bg-[#f0f4f9] dark:bg-gray-900 p-8">
@@ -226,21 +229,47 @@ export default function BillingPage() {
 
       {/* Tabs */}
       <div className="flex gap-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl p-1.5 w-fit mb-6 shadow-sm">
-        {plans.map((p) => (
-          <button
-            key={p.key}
-            onClick={() => setActive(p.key)}
-            className={`px-5 py-2 text-sm font-medium rounded-xl transition-all cursor-pointer ${
-              active === p.key
-                ? "bg-blue-600 text-white shadow-sm"
-                : "text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700"
-            }`}
-          >
-            {p.label}
-          </button>
-        ))}
+        <button
+          onClick={() => setView("current")}
+          className={`px-5 py-2 text-sm font-medium rounded-xl transition-all cursor-pointer ${
+            view === "current"
+              ? "bg-blue-600 text-white shadow-sm"
+              : "text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700"
+          }`}
+        >
+          Mevcut Plan
+        </button>
+        <button
+          onClick={() => setView("plans")}
+          className={`px-5 py-2 text-sm font-medium rounded-xl transition-all cursor-pointer ${
+            view === "plans"
+              ? "bg-blue-600 text-white shadow-sm"
+              : "text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700"
+          }`}
+        >
+          Planlar
+        </button>
       </div>
 
+      {view === "plans" ? (
+        <PlansCarousel />
+      ) : (
+        <CurrentPlanView plan={plan} onGoToPlans={() => setView("plans")} />
+      )}
+    </div>
+  );
+}
+
+/* ── CurrentPlanView ── */
+function CurrentPlanView({
+  plan,
+  onGoToPlans,
+}: {
+  plan: Plan;
+  onGoToPlans: () => void;
+}) {
+  return (
+    <>
       {/* Plan Card */}
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-sm overflow-hidden mb-6">
 
@@ -344,7 +373,7 @@ export default function BillingPage() {
               {plan.hint.text}
             </p>
             <button
-              onClick={() => plan.hint.target && setActive(plan.hint.target)}
+              onClick={onGoToPlans}
               className={`shrink-0 text-sm font-semibold px-5 py-2.5 rounded-xl transition-colors cursor-pointer ${plan.hint.btnStyle}`}
             >
               {plan.hint.btnLabel}
@@ -395,7 +424,181 @@ export default function BillingPage() {
           </tbody>
         </table>
       </div>
+    </>
+  );
+}
 
+/* ── PlanCard ── */
+function PlanCard({ p, isCurrent }: { p: Plan; isCurrent: boolean }) {
+  const navigate = useNavigate();
+
+  const handleUpgrade = () => {
+    if (p.key === "corp") {
+      navigate("/contact");
+      return;
+    }
+    const numericPrice = p.price.replace(/[^\d]/g, "");
+    navigate(`/payment?plan=${encodeURIComponent(p.label)}&price=${numericPrice}`);
+  };
+
+  return (
+    <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-3xl shadow-xl overflow-hidden flex flex-col h-[640px] w-full">
+      <div className={`h-1.5 w-full shrink-0 ${p.accentColor}`} />
+      <div className="p-8 flex-1 flex flex-col min-h-0">
+        <div className="flex items-start justify-between mb-6 shrink-0">
+          <div>
+            <span className={`inline-flex items-center text-[11px] font-semibold px-3 py-1 rounded-full mb-3 ${p.badgeStyle}`}>
+              {isCurrent ? p.badge : p.label}
+            </span>
+            <h2 className="text-3xl font-bold text-gray-900 dark:text-gray-100">{p.label}</h2>
+          </div>
+          <div className="text-right">
+            <p className={`font-bold text-gray-900 dark:text-gray-100 ${p.price.length > 4 ? "text-2xl" : "text-4xl"}`}>
+              {p.price}
+              {p.key !== "corp" && (
+                <span className="text-sm font-normal text-gray-400 dark:text-gray-500"> /ay</span>
+              )}
+            </p>
+            <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">{p.priceNote}</p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-5 mb-6 flex-1 min-h-0">
+          <div className="bg-green-50 dark:bg-green-900/20 border border-green-100 dark:border-green-800 rounded-2xl p-5 overflow-y-auto">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-green-600 dark:text-green-400 mb-3 flex items-center gap-1.5">
+              <span>✓</span> Avantajlar
+            </p>
+            <ul className="flex flex-col gap-2">
+              {p.pros.map((pro, i) => (
+                <li key={i} className="flex items-start gap-2 text-xs text-gray-600 dark:text-gray-300 leading-relaxed">
+                  <span className="text-green-500 font-bold shrink-0 mt-0.5">+</span>
+                  <span>
+                    {pro.text}
+                    {pro.tag && <FeatureTag tag={pro.tag} />}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div className="bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800 rounded-2xl p-5 overflow-y-auto">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-red-500 dark:text-red-400 mb-3 flex items-center gap-1.5">
+              <span>✗</span> Dezavantajlar
+            </p>
+            <ul className="flex flex-col gap-2">
+              {p.cons.map((con, i) => (
+                <li key={i} className="flex items-start gap-2 text-xs text-gray-600 dark:text-gray-300 leading-relaxed">
+                  <span className="text-red-400 font-bold shrink-0 mt-0.5">−</span>
+                  {con}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between pt-2 border-t border-gray-100 dark:border-gray-700 shrink-0">
+          <div className="pt-4">
+            {isCurrent ? (
+              <span className="text-xs font-semibold text-gray-400 dark:text-gray-500">Şu anki planınız</span>
+            ) : (
+              <span className="text-xs text-gray-400 dark:text-gray-500">{p.label}</span>
+            )}
+          </div>
+          {!isCurrent && (
+            <button
+              onClick={handleUpgrade}
+              className="pt-4 text-sm font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 cursor-pointer transition-colors"
+            >
+              {p.key === "corp" ? "İletişime geç →" : "Bu plana geç →"}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── PlansCarousel ── */
+function PlansCarousel() {
+  const [index, setIndex] = useState(
+    Math.max(0, plans.findIndex((p) => p.key === CURRENT_PLAN_KEY)),
+  );
+
+  const goPrev = () => setIndex((i) => (i === 0 ? plans.length - 1 : i - 1));
+  const goNext = () => setIndex((i) => (i === plans.length - 1 ? 0 : i + 1));
+
+  const n = plans.length;
+  const offsetOf = (i: number) => {
+    const raw = i - index;
+    if (raw > n / 2) return raw - n;
+    if (raw < -n / 2) return raw + n;
+    return raw;
+  };
+
+  return (
+    <div>
+      <div className="relative mb-5 max-w-5xl mx-auto px-16">
+        <button
+          onClick={goPrev}
+          aria-label="Önceki plan"
+          className="absolute left-0 top-1/2 -translate-y-1/2 z-20 shrink-0 w-11 h-11 rounded-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-md flex items-center justify-center text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 hover:border-blue-200 dark:hover:border-blue-800 hover:shadow-lg cursor-pointer transition-all text-lg"
+        >
+          ‹
+        </button>
+
+        <div className="relative h-[640px]" style={{ perspective: "1600px" }}>
+          {plans.map((pl, i) => {
+            const offset = offsetOf(i);
+            const abs = Math.abs(offset);
+            if (abs > 1) return null;
+
+            const isCenter = offset === 0;
+            const transform = isCenter
+              ? "translateX(0) scale(1)"
+              : `translateX(${offset * 46}%) scale(0.86)`;
+
+            return (
+              <div
+                key={pl.key}
+                onClick={() => !isCenter && setIndex(i)}
+                className={`absolute inset-0 transition-all duration-300 ease-out ${
+                  isCenter ? "" : "cursor-pointer"
+                }`}
+                style={{
+                  transform,
+                  zIndex: isCenter ? 10 : 1,
+                  opacity: isCenter ? 1 : 0.45,
+                  filter: isCenter ? "none" : "blur(1px) grayscale(0.3)",
+                  pointerEvents: isCenter ? "auto" : "auto",
+                }}
+              >
+                <PlanCard p={pl} isCurrent={pl.key === CURRENT_PLAN_KEY} />
+              </div>
+            );
+          })}
+        </div>
+
+        <button
+          onClick={goNext}
+          aria-label="Sonraki plan"
+          className="absolute right-0 top-1/2 -translate-y-1/2 z-20 shrink-0 w-11 h-11 rounded-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-md flex items-center justify-center text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 hover:border-blue-200 dark:hover:border-blue-800 hover:shadow-lg cursor-pointer transition-all text-lg"
+        >
+          ›
+        </button>
+      </div>
+
+      <div className="flex justify-center gap-1.5">
+        {plans.map((pl, i) => (
+          <button
+            key={pl.key}
+            onClick={() => setIndex(i)}
+            aria-label={`${pl.label} planına git`}
+            className={`h-1.5 rounded-full transition-all cursor-pointer ${
+              i === index ? "w-6 bg-blue-500" : "w-1.5 bg-gray-300 dark:bg-gray-600"
+            }`}
+          />
+        ))}
+      </div>
     </div>
   );
 }
