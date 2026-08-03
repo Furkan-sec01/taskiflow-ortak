@@ -82,6 +82,19 @@ exports.register = async (req, res) => {
       {expiresIn: '24h'}
     );
 
+    const userAgent = req.headers["user-agent"] || "Bilinmeyen Cihaz";
+    const isMobile = /mobile/i.test(userAgent);
+
+    await prisma.session.create({
+      data: {
+        userId: result.user.id,
+        token: token,
+        deviceName: userAgent.slice(0, 100),
+        deviceType: isMobile ? "mobile" : "web",
+        ipAddress: req.ip,
+      },
+    });
+
     const {password: _, ...userData} = result.user;
     res.status(201).json({ message: "Kayıt Başarılı", token, user: userData });
 
@@ -155,3 +168,19 @@ exports.login = async (req,res) => {
     res.status(500).json({ error: "Sunucu hatası" });
   }
 }
+  //çıkış yap
+exports.logout = async (req, res) => {
+  const token = req.headers.authorization?.split(" ")[1];
+
+  if (!token) {
+    return res.status(400).json({ error: "Token bulunamadı." });
+  }
+
+  try {
+    await prisma.session.deleteMany({ where: { token } });
+    res.json({ message: "Çıkış yapıldı." });
+  } catch (error) {
+    console.error("Logout Error:", error);
+    res.status(500).json({ error: "Çıkış işlemi başarısız oldu." });
+  }
+};

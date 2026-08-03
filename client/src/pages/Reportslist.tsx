@@ -5,26 +5,19 @@ import {
 } from "lucide-react";
 import { API_BASE } from "../config/api";
 
-// ── Types ──────────────────────────────────────────────────────────────────────
+
 interface Project {
   id: string;
   name: string;
   description: string;
-  status: "active" | "completed" | "paused";
   sprint: string;
   color: string;
   icon: React.ReactNode;
 }
 
+
 const DYNAMIC_COLORS = ["#6366f1", "#ec4899", "#14b8a6", "#f97316", "#84cc16", "#a855f7"];
 
-const STATUS_CONFIG = {
-  active:    { label: "Aktif",        dot: "bg-emerald-500", text: "text-emerald-600 dark:text-emerald-400", bg: "bg-emerald-50 dark:bg-emerald-900/30" },
-  paused:    { label: "Duraklatıldı", dot: "bg-amber-400",   text: "text-amber-600 dark:text-amber-400",    bg: "bg-amber-50 dark:bg-amber-900/30" },
-  completed: { label: "Tamamlandı",   dot: "bg-slate-400",   text: "text-slate-500 dark:text-slate-400",    bg: "bg-slate-100 dark:bg-slate-700" },
-};
-
-// ── Main Component ─────────────────────────────────────────────────────────────
 export default function ReportsList() {
   const navigate = useNavigate();
   const [projects, setProjects] = useState<Project[]>([]);
@@ -48,7 +41,6 @@ export default function ReportsList() {
         id: p.id,
         name: p.title,
         description: p.description || `${p.title} çalışma alanı — proje raporları.`,
-        status: "active" as const,
         sprint: "Genel Görünüm",
         color: DYNAMIC_COLORS[index % DYNAMIC_COLORS.length],
         icon: <Building2 size={20} />,
@@ -106,7 +98,6 @@ export default function ReportsList() {
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {projects.map((project) => {
-            const sc = STATUS_CONFIG[project.status];
             return (
               <button
                 key={project.id}
@@ -141,10 +132,6 @@ export default function ReportsList() {
                     {project.description}
                   </p>
 
-                  <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold ${sc.bg} ${sc.text}`}>
-                    <span className={`w-1.5 h-1.5 rounded-full ${sc.dot}`} />
-                    {sc.label}
-                  </div>
                 </div>
               </button>
             );

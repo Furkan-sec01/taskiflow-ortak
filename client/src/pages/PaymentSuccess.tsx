@@ -1,15 +1,59 @@
+import { useState, useEffect } from "react";
 import { Link, useSearchParams, useNavigate } from "react-router-dom";
 import { useTheme } from "../context/ThemeContext";
-import { CheckCircle, ArrowRight, Download, Mail } from "lucide-react";
+import { CheckCircle, ArrowRight, Download, Mail, Loader2 } from "lucide-react";
 import Logo from "../components/Logo";
+import { API_BASE } from "../config/api";
+
+
+const PLAN_LABELS: Record<string, string> = {
+  FREE: "Ücretsiz",
+  PRO: "Profesyonel",
+  BUSINESS: "Kurumsal",
+};
 
 const PaymentSuccess = () => {
   const { darkMode } = useTheme();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
-  const planName = searchParams.get("plan") || "Profesyonel";
-  const price = searchParams.get("price") || "99";
+  // URL parametreleri sadece backend'den veri gelene kadar geçici fallback
+  const fallbackPlanName = searchParams.get("plan") || "Profesyonel";
+  const fallbackPrice = searchParams.get("price") || "99";
+
+  const [loading, setLoading] = useState(true);
+  const [planName, setPlanName] = useState(fallbackPlanName);
+  const [price, setPrice] = useState(fallbackPrice);
+
+  useEffect(() => {
+    const fetchOverview = async () => {
+      const token = localStorage.getItem("token");
+      if (!token) {
+        setLoading(false);
+        return;
+      }
+      try {
+        const res = await fetch(`${API_BASE}/api/payments/overview`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || "Fatura bilgileri alınamadı.");
+
+        const plan = data.subscription?.plan;
+        if (plan) setPlanName(PLAN_LABELS[plan] || plan);
+
+        const lastPayment = data.payments?.[0];
+        if (lastPayment?.amount != null) setPrice(String(lastPayment.amount));
+      } catch (err) {
+        console.error("Billing overview çekilemedi, URL parametreleri gösteriliyor:", err);
+        // sessizce fallback (URL parametreleri) ile devam ediyoruz
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchOverview();
+  }, []);
 
   return (
     <div className={`min-h-screen font-sans transition-colors duration-300 ${darkMode ? 'bg-gray-900 text-white' : 'bg-gray-50 text-gray-900'}`}>
@@ -41,20 +85,27 @@ const PaymentSuccess = () => {
 
         {/* Özet Kart */}
         <div className={`p-8 rounded-3xl shadow-xl mb-8 ${darkMode ? 'bg-gray-800 border border-gray-700' : 'bg-white border border-gray-200'}`}>
-          <div className="space-y-4">
-            <div className="flex justify-between items-center">
-              <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>Plan</span>
-              <span className="font-bold text-lg">{planName}</span>
+          {loading ? (
+            <div className="flex items-center justify-center gap-2 py-4 text-gray-400">
+              <Loader2 size={18} className="animate-spin" />
+              Fatura bilgileri getiriliyor...
             </div>
-            <div className="flex justify-between items-center">
-              <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>Ödenen Tutar</span>
-              <span className="font-bold text-2xl text-blue-600">{price}₺</span>
+          ) : (
+            <div className="space-y-4">
+              <div className="flex justify-between items-center">
+                <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>Plan</span>
+                <span className="font-bold text-lg">{planName}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>Ödenen Tutar</span>
+                <span className="font-bold text-2xl text-blue-600">{price}₺</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>Durum</span>
+                <span className="font-bold text-green-600">Aktif</span>
+              </div>
             </div>
-            <div className="flex justify-between items-center">
-              <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>Durum</span>
-              <span className="font-bold text-green-600">Aktif</span>
-            </div>
-          </div>
+          )}
         </div>
 
         {/* Bilgilendirme */}

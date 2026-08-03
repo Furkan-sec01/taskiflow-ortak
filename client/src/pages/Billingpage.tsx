@@ -1,15 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { API_BASE } from "../config/api";
+import { PLAN_LABELS, PLAN_PRICES, isPurchasablePlan, type PlanCode } from "../config/plans";
 
 /* ── Types ── */
 type PlanKey = "starter" | "pro" | "corp";
-
-interface Invoice {
-  date: string;
-  description: string;
-  amount: string;
-  status: string;
-}
 
 interface UsageStat {
   label: string;
@@ -22,6 +17,7 @@ interface UsageStat {
 
 interface Plan {
   key: PlanKey;
+  code: PlanCode;
   label: string;
   badge: string;
   badgeStyle: string;
@@ -38,17 +34,66 @@ interface Plan {
     btnStyle: string;
   };
   usage: UsageStat[];
-  invoices: Invoice[];
+}
+
+/* ── Backend <-> UI eşlemesi ve yardımcılar ── */
+const PLAN_KEY_MAP: Record<string, PlanKey> = {
+  FREE: "starter",
+  PRO: "pro",
+  BUSINESS: "corp",
+};
+
+function formatDate(dateStr: string | null): string {
+  if (!dateStr) return "—";
+  try {
+    return new Date(dateStr).toLocaleDateString("tr-TR", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    });
+  } catch {
+    return "—";
+  }
+}
+
+function formatAmount(amount: number): string {
+  return `₺${amount.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function statusLabel(status: string): { label: string; className: string } {
+  switch (status) {
+    case "PAID":
+      return { label: "Ödendi", className: "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300" };
+    case "PENDING":
+      return { label: "Beklemede", className: "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300" };
+    case "FAILED":
+      return { label: "Başarısız", className: "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300" };
+    case "REFUNDED":
+      return { label: "İade Edildi", className: "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300" };
+    default:
+      return { label: status, className: "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300" };
+  }
+}
+
+interface RealPayment {
+  id: string;
+  amount: number;
+  plan?: string | null;
+  currency: string;
+  status: string;
+  createdAt: string;
+  description?: string | null;
 }
 
 /* ── Data ── */
 const plans: Plan[] = [
   {
     key: "starter",
-    label: "Başlangıç",
+    code: "FREE",
+    label: PLAN_LABELS.FREE,
     badge: "● Aktif Plan",
     badgeStyle: "bg-blue-50 text-blue-600 border border-blue-200 dark:bg-blue-900/20 dark:text-blue-300 dark:border-blue-800",
-    price: "₺0",
+    price: `₺${PLAN_PRICES.FREE}`,
     priceNote: "Süresiz ücretsiz",
     accentColor: "bg-blue-500",
     pros: [
@@ -74,16 +119,14 @@ const plans: Plan[] = [
       { label: "Projeler", current: "1", max: "2", percent: 50, color: "bg-blue-500" },
       { label: "Depolama", current: "38", max: "50", unit: "MB", percent: 76, color: "bg-amber-400" },
     ],
-    invoices: [
-      { date: "14 Oca 2025", description: "Başlangıç Planı", amount: "₺0,00", status: "Aktif" },
-    ],
   },
   {
     key: "pro",
-    label: "Profesyonel",
+    code: "PRO",
+    label: PLAN_LABELS.PRO,
     badge: "★ Profesyonel",
     badgeStyle: "bg-purple-50 text-purple-600 border border-purple-200 dark:bg-purple-900/20 dark:text-purple-300 dark:border-purple-800",
-    price: "₺349",
+    price: `₺${PLAN_PRICES.PRO}`,
     priceNote: "Her ay 1'inde yenilenir",
     accentColor: "bg-gradient-to-r from-purple-500 to-blue-500",
     pros: [
@@ -118,15 +161,11 @@ const plans: Plan[] = [
       { label: "AI Kredisi", current: "320", max: "500", percent: 64, color: "bg-blue-400" },
       { label: "Otomasyon", current: "8", max: "25 kural", percent: 32, color: "bg-purple-400" },
     ],
-    invoices: [
-      { date: "1 Mar 2025", description: "Profesyonel Plan", amount: "₺349,00", status: "Ödendi" },
-      { date: "1 Şub 2025", description: "Profesyonel Plan", amount: "₺349,00", status: "Ödendi" },
-      { date: "1 Oca 2025", description: "Profesyonel Plan", amount: "₺349,00", status: "Ödendi" },
-    ],
   },
   {
     key: "corp",
-    label: "Şirketler",
+    code: "BUSINESS",
+    label: PLAN_LABELS.BUSINESS,
     badge: "🏢 Kurumsal",
     badgeStyle: "bg-orange-50 text-orange-600 border border-orange-200 dark:bg-orange-900/20 dark:text-orange-300 dark:border-orange-800",
     price: "Özel",
@@ -162,9 +201,6 @@ const plans: Plan[] = [
       { label: "AI Kredisi", current: "∞", percent: 100, color: "bg-blue-400" },
       { label: "Uptime (Bu ay)", current: "99.98%", percent: 100, color: "bg-green-500" },
       { label: "Destek Yanıt", current: "< 1 saat", percent: 100, color: "bg-green-500" },
-    ],
-    invoices: [
-      { date: "1 Oca 2025", description: "Kurumsal Plan (Yıllık)", amount: "Özel", status: "Aktif" },
     ],
   },
 ];
@@ -212,11 +248,51 @@ function UsageCard({ stat }: { stat: UsageStat }) {
 }
 
 /* ── BillingPage ── */
-const CURRENT_PLAN_KEY: PlanKey = "starter";
-
 export default function BillingPage() {
   const [view, setView] = useState<"current" | "plans">("current");
-  const plan = plans.find((p) => p.key === CURRENT_PLAN_KEY)!;
+  const [active, setActive] = useState<PlanKey>("starter");
+  const [loading, setLoading] = useState(true);
+  const [realPlan, setRealPlan] = useState<string>("FREE");
+  const [realStartDate, setRealStartDate] = useState<string | null>(null);
+  const [realEndDate, setRealEndDate] = useState<string | null>(null);
+  const [realPayments, setRealPayments] = useState<RealPayment[]>([]);
+
+  useEffect(() => {
+    const fetchOverview = async () => {
+      const token = localStorage.getItem("token");
+      if (!token) {
+        setLoading(false);
+        return;
+      }
+      try {
+        const res = await fetch(`${API_BASE}/api/payments/overview`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || "Fatura bilgileri alınamadı.");
+
+        const planCode = data.subscription?.plan || "FREE";
+        setRealPlan(planCode);
+        setRealStartDate(data.subscription?.startDate || null);
+        setRealEndDate(data.subscription?.endDate || null);
+        setRealPayments(data.payments || []);
+        setActive(PLAN_KEY_MAP[planCode] || "starter");
+      } catch (err) {
+        console.error("Billing overview çekilemedi:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchOverview();
+  }, []);
+
+  const plan = plans.find((p) => p.key === active)!;
+  // Kullanıcının gerçekte sahip olduğu plan. Hem "Mevcut Plan" sekmesi hem de
+  // plan karuseli bunu kullanır; sabit bir değere düşülürse ücretli kullanıcıya
+  // ücretsiz plandaymış gibi gösterilir ve aynı planı tekrar satın alabilir.
+  const currentPlanKey: PlanKey = PLAN_KEY_MAP[realPlan] || "starter";
+  const isCurrentPlan = active === currentPlanKey;
 
   return (
     <div className="min-h-screen bg-[#f0f4f9] dark:bg-gray-900 p-8">
@@ -224,7 +300,9 @@ export default function BillingPage() {
       {/* Page Header */}
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-1">Billing</h1>
-        <p className="text-sm text-gray-500 dark:text-gray-400">Planınızı görüntüleyin, yönetin ve yükseltin.</p>
+        <p className="text-sm text-gray-500 dark:text-gray-400">
+          {loading ? "Fatura bilgileriniz getiriliyor..." : "Planınızı görüntüleyin, yönetin ve yükseltin."}
+        </p>
       </div>
 
       {/* Tabs */}
@@ -252,9 +330,18 @@ export default function BillingPage() {
       </div>
 
       {view === "plans" ? (
-        <PlansCarousel />
+        <PlansCarousel currentPlanKey={currentPlanKey} />
       ) : (
-        <CurrentPlanView plan={plan} onGoToPlans={() => setView("plans")} />
+        <CurrentPlanView
+          plan={plan}
+          onGoToPlans={() => setView("plans")}
+          isCurrentPlan={isCurrentPlan}
+          realPlan={realPlan}
+          realStartDate={realStartDate}
+          realEndDate={realEndDate}
+          realPayments={realPayments}
+          loading={loading}
+        />
       )}
     </div>
   );
@@ -264,9 +351,21 @@ export default function BillingPage() {
 function CurrentPlanView({
   plan,
   onGoToPlans,
+  isCurrentPlan,
+  realPlan,
+  realStartDate,
+  realEndDate,
+  realPayments,
+  loading,
 }: {
   plan: Plan;
   onGoToPlans: () => void;
+  isCurrentPlan: boolean;
+  realPlan: string;
+  realStartDate: string | null;
+  realEndDate: string | null;
+  realPayments: RealPayment[];
+  loading: boolean;
 }) {
   return (
     <>
@@ -281,8 +380,14 @@ function CurrentPlanView({
           {/* Head */}
           <div className="flex items-start justify-between mb-5">
             <div>
-              <span className={`inline-flex items-center text-[11px] font-semibold px-3 py-1 rounded-full mb-3 ${plan.badgeStyle}`}>
-                {plan.badge}
+              <span
+                className={`inline-flex items-center text-[11px] font-semibold px-3 py-1 rounded-full mb-3 ${
+                  isCurrentPlan
+                    ? "bg-green-50 text-green-600 border border-green-200 dark:bg-green-900/20 dark:text-green-300 dark:border-green-800"
+                    : plan.badgeStyle
+                }`}
+              >
+                {isCurrentPlan ? "✓ Aktif Planınız" : plan.badge}
               </span>
               <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{plan.label}</h2>
             </div>
@@ -318,15 +423,21 @@ function CurrentPlanView({
               <>
                 <div>
                   <p className="text-[10px] uppercase tracking-wider text-gray-400 dark:text-gray-500 font-semibold mb-0.5">Plan Başlangıcı</p>
-                  <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">{plan.key === "starter" ? "14 Oca 2025" : "—"}</p>
+                  <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                    {isCurrentPlan && realStartDate ? formatDate(realStartDate) : "—"}
+                  </p>
                 </div>
                 <div>
                   <p className="text-[10px] uppercase tracking-wider text-gray-400 dark:text-gray-500 font-semibold mb-0.5">Sonraki Ödeme</p>
-                  <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">{plan.key === "starter" ? "—" : "1 Nis 2025"}</p>
+                  <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                    {isCurrentPlan ? (realEndDate ? formatDate(realEndDate) : "Süresiz") : "—"}
+                  </p>
                 </div>
                 <div>
                   <p className="text-[10px] uppercase tracking-wider text-gray-400 dark:text-gray-500 font-semibold mb-0.5">Fatura Yöntemi</p>
-                  <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">{plan.key === "starter" ? "—" : "Kredi Kartı"}</p>
+                  <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                    {isCurrentPlan && realPlan !== "FREE" ? "Kredi Kartı" : "—"}
+                  </p>
                 </div>
               </>
             )}
@@ -404,23 +515,39 @@ function CurrentPlanView({
             </tr>
           </thead>
           <tbody>
-            {plan.invoices.map((inv, i) => (
-              <tr key={i} className="border-b border-gray-50 dark:border-gray-700 last:border-0 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-                <td className="px-5 py-3.5 text-sm text-gray-600 dark:text-gray-300">{inv.date}</td>
-                <td className="px-5 py-3.5 text-sm text-gray-600 dark:text-gray-300">{inv.description}</td>
-                <td className="px-5 py-3.5 text-sm font-medium text-gray-800 dark:text-gray-200">{inv.amount}</td>
-                <td className="px-5 py-3.5">
-                  <span className="bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 text-[10px] font-bold px-2.5 py-1 rounded-full">
-                    {inv.status}
-                  </span>
-                </td>
-                <td className="px-5 py-3.5">
-                  <button className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium cursor-pointer transition-colors">
-                    İndir
-                  </button>
+            {realPayments.length === 0 && (
+              <tr>
+                <td colSpan={5} className="px-5 py-6 text-sm text-center text-gray-400 dark:text-gray-500">
+                  {loading ? "Yükleniyor..." : "Henüz bir ödeme kaydınız yok."}
                 </td>
               </tr>
-            ))}
+            )}
+            {realPayments.map((pmt) => {
+              const s = statusLabel(pmt.status);
+              return (
+                <tr key={pmt.id} className="border-b border-gray-50 dark:border-gray-700 last:border-0 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                  <td className="px-5 py-3.5 text-sm text-gray-600 dark:text-gray-300">{formatDate(pmt.createdAt)}</td>
+                  <td className="px-5 py-3.5 text-sm text-gray-600 dark:text-gray-300">
+                    {pmt.description || (pmt.plan ? `${pmt.plan} Plan Aboneliği` : "Ödeme")}
+                  </td>
+                  <td className="px-5 py-3.5 text-sm font-medium text-gray-800 dark:text-gray-200">{formatAmount(pmt.amount)}</td>
+                  <td className="px-5 py-3.5">
+                    <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${s.className}`}>
+                      {s.label}
+                    </span>
+                  </td>
+                  <td className="px-5 py-3.5">
+                    <button
+                      disabled
+                      title="Fatura indirme özelliği yakında eklenecek."
+                      className="text-sm text-gray-300 dark:text-gray-600 font-medium cursor-not-allowed"
+                    >
+                      İndir
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -433,12 +560,13 @@ function PlanCard({ p, isCurrent }: { p: Plan; isCurrent: boolean }) {
   const navigate = useNavigate();
 
   const handleUpgrade = () => {
-    if (p.key === "corp") {
+    if (p.code === "BUSINESS") {
       navigate("/contact");
       return;
     }
-    const numericPrice = p.price.replace(/[^\d]/g, "");
-    navigate(`/payment?plan=${encodeURIComponent(p.label)}&price=${numericPrice}`);
+    // Ödeme sayfasına Türkçe etiket değil plan KODU gönderilir; tutarı sunucu
+    // kendi fiyat tablosundan belirler.
+    navigate(`/payment?plan=${p.code}`);
   };
 
   return (
@@ -504,12 +632,17 @@ function PlanCard({ p, isCurrent }: { p: Plan; isCurrent: boolean }) {
               <span className="text-xs text-gray-400 dark:text-gray-500">{p.label}</span>
             )}
           </div>
-          {!isCurrent && (
+          {!isCurrent && p.code === "FREE" && (
+            <span className="pt-4 text-xs text-gray-400 dark:text-gray-500">
+              Abonelik bitiminde bu plana dönülür
+            </span>
+          )}
+          {!isCurrent && p.code !== "FREE" && (
             <button
               onClick={handleUpgrade}
               className="pt-4 text-sm font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 cursor-pointer transition-colors"
             >
-              {p.key === "corp" ? "İletişime geç →" : "Bu plana geç →"}
+              {isPurchasablePlan(p.code) ? "Bu plana geç →" : "İletişime geç →"}
             </button>
           )}
         </div>
@@ -519,10 +652,17 @@ function PlanCard({ p, isCurrent }: { p: Plan; isCurrent: boolean }) {
 }
 
 /* ── PlansCarousel ── */
-function PlansCarousel() {
+function PlansCarousel({ currentPlanKey }: { currentPlanKey: PlanKey }) {
   const [index, setIndex] = useState(
-    Math.max(0, plans.findIndex((p) => p.key === CURRENT_PLAN_KEY)),
+    Math.max(0, plans.findIndex((p) => p.key === currentPlanKey)),
   );
+
+  // Abonelik bilgisi karusel açıldıktan sonra gelirse (ilk render'da realPlan
+  // henüz "FREE") aktif slaytı gerçek plana taşı.
+  useEffect(() => {
+    const i = plans.findIndex((p) => p.key === currentPlanKey);
+    if (i >= 0) setIndex(i);
+  }, [currentPlanKey]);
 
   const goPrev = () => setIndex((i) => (i === 0 ? plans.length - 1 : i - 1));
   const goNext = () => setIndex((i) => (i === plans.length - 1 ? 0 : i + 1));
@@ -572,7 +712,7 @@ function PlansCarousel() {
                   pointerEvents: isCenter ? "auto" : "auto",
                 }}
               >
-                <PlanCard p={pl} isCurrent={pl.key === CURRENT_PLAN_KEY} />
+                <PlanCard p={pl} isCurrent={pl.key === currentPlanKey} />
               </div>
             );
           })}

@@ -2,32 +2,6 @@ const {PrismaClient} = require("@prisma/client");
 const prisma = new PrismaClient();
 
 
-exports.listMyTasks = async (req, res) => {
-    const userId = req.user.id || req.user.userId;
-
-    try {
-        const tasks = await prisma.task.findMany({
-            where: {
-                OR: [
-                    { ownerId: userId },
-                    { assigneeId: userId }
-                ]
-            },
-            include: {
-                project: {
-                    select: { id: true, title: true }
-                }
-            },
-            orderBy: { createdAt: "desc" }
-        });
-
-        res.status(200).json(tasks);
-    } catch (error) {
-        console.error("listMyTasks hatası:", error);
-        res.status(500).json({ error: "Görevler alınırken bir hata oluştu." });
-    }
-};
-
 exports.createTask = async (req, res) => {
     const userId = req.user.id || req.user.userId;
     const {title,assigneeMail,priority,date,description} = req.body;

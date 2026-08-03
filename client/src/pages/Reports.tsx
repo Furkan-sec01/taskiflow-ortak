@@ -1,134 +1,56 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
-  LineChart, Line, BarChart, Bar, AreaChart, Area,
+  LineChart, Line, BarChart, Bar,
   ScatterChart, Scatter, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ResponsiveContainer, ReferenceLine,
 } from "recharts";
 import {
-  ArrowLeft, Plus, RefreshCw, TrendingDown, TrendingUp,
-  BarChart2,
-  Zap, Layers, GitMerge, PieChart as PieIcon, Clock, X, Moon, Sun,
+  ArrowLeft, TrendingDown, TrendingUp,
+  BarChart2, Zap, PieChart as PieIcon, Clock, Moon, Sun, LayoutGrid,
 } from "lucide-react";
 import { API_BASE } from "../config/api";
 
-// ── Types ──────────────────────────────────────────────────────────────────────
-type Status = "done" | "progress" | "todo" | "blocked";
-type Priority = "high" | "medium" | "low";
-interface Issue {
-  key: string; summary: string; status: Status;
-  priority: Priority; assignee: string; sp: number; age: number;
+
+interface ApiTask {
+  id: string;
+  title: string;
+  description?: string | null;
+  priority: string;
+  dueDate?: string | null;
+  columnId: string;
+  assignee?: { name: string; email: string } | null;
+  isCompleted: boolean;
+  completedAt?: string | null;
+  createdAt: string;
+  totalTime?: number;
+  storyPoints?: number;
+  sprintId?: string | null;
+}
+interface ApiColumn { id: string; title: string; order: number; tasks: ApiTask[] }
+interface BoardData { id: string; title: string; columns: ApiColumn[] }
+
+interface SprintTask { id: string; title: string; storyPoints: number; isCompleted: boolean; priority: string }
+interface ApiSprint {
+  id: string; name: string; goal: string | null;
+  status: "PLANNED" | "ACTIVE" | "COMPLETED";
+  startDate: string | null; endDate: string | null; completedAt: string | null;
+  tasks: SprintTask[];
+  metrics: { totalTasks: number; completedTasks: number; committedPoints: number; completedPoints: number; completionRate: number };
 }
 
-// ── Static Chart Data (gerçek sprint/geçmiş verisi olmadığı için örnek veri) ───
-const BURNDOWN_DATA = [
-  { day: "Gün 1", ideal: 80, actual: 80 },
-  { day: "Gün 2", ideal: 71, actual: 75 },
-  { day: "Gün 3", ideal: 62, actual: 68 },
-  { day: "Gün 4", ideal: 53, actual: 62 },
-  { day: "Gün 5", ideal: 44, actual: 58 },
-  { day: "Gün 6", ideal: 36, actual: 50 },
-  { day: "Gün 7", ideal: 27, actual: 42 },
-  { day: "Gün 8", ideal: 18, actual: 38 },
-  { day: "Gün 9", ideal: 9, actual: 28 },
-];
-const BURNUP_DATA = [
-  { day: "Gün 1", completed: 0, scope: 72 },
-  { day: "Gün 2", completed: 5, scope: 72 },
-  { day: "Gün 3", completed: 12, scope: 72 },
-  { day: "Gün 4", completed: 18, scope: 80 },
-  { day: "Gün 5", completed: 24, scope: 80 },
-  { day: "Gün 6", completed: 32, scope: 80 },
-  { day: "Gün 7", completed: 38, scope: 80 },
-  { day: "Gün 8", completed: 44, scope: 80 },
-  { day: "Gün 9", completed: 52, scope: 80 },
-];
-const VELOCITY_DATA = [
-  { sprint: "Sprint 2", committed: 60, completed: 55 },
-  { sprint: "Sprint 3", committed: 65, completed: 62 },
-  { sprint: "Sprint 4", committed: 58, completed: 41 },
-  { sprint: "Sprint 5", committed: 70, completed: 67 },
-  { sprint: "Sprint 6", committed: 68, completed: 72 },
-  { sprint: "Sprint 7", committed: 80, completed: 52 },
-];
-const CFD_DATA = [
-  { date: "22 Oca", todo: 14, progress: 6, review: 3, done: 2 },
-  { date: "23 Oca", todo: 13, progress: 7, review: 4, done: 4 },
-  { date: "24 Oca", todo: 12, progress: 8, review: 5, done: 7 },
-  { date: "25 Oca", todo: 11, progress: 8, review: 6, done: 9 },
-  { date: "26 Oca", todo: 11, progress: 7, review: 7, done: 11 },
-  { date: "27 Oca", todo: 10, progress: 8, review: 6, done: 13 },
-  { date: "28 Oca", todo: 10, progress: 7, review: 7, done: 14 },
-  { date: "29 Oca", todo: 12, progress: 7, review: 6, done: 16 },
-  { date: "30 Oca", todo: 12, progress: 7, review: 6, done: 17 },
-  { date: "31 Oca", todo: 12, progress: 7, review: 5, done: 18 },
-];
-const CONTROL_DATA = Array.from({ length: 20 }, (_, i) => ({
-  task: `#${i + 1}`,
-  cycleTime: [2, 3, 4, 2, 1, 5, 3, 11, 2, 3, 4, 2, 3, 8, 2, 3, 4, 2, 1, 3][i],
-}));
-const CREATED_DATA = [
-  { month: "Eyl", created: 18, resolved: 14 },
-  { month: "Eki", created: 22, resolved: 16 },
-  { month: "Kas", created: 16, resolved: 18 },
-  { month: "Ara", created: 14, resolved: 15 },
-  { month: "Oca", created: 12, resolved: 11 },
-  { month: "Şub", created: 12, resolved: 4 },
-];
-const AGE_DATA = [
-  { status: "Yapılacak", avgAge: 9.2 },
-  { status: "Devam Eden", avgAge: 6.8 },
-  { status: "İncelemede", avgAge: 4.1 },
-  { status: "Bloke", avgAge: 15.3 },
-];
-
-// ── Color Helpers ──────────────────────────────────────────────────────────────
-const STATUS_COLORS_LIGHT: Record<Status, { bg: string; text: string; label: string }> = {
-  done:     { bg: "bg-emerald-50", text: "text-emerald-700", label: "✓ Tamamlandı" },
-  progress: { bg: "bg-blue-50",    text: "text-blue-700",    label: "↻ Devam" },
-  todo:     { bg: "bg-slate-100",  text: "text-slate-600",   label: "◦ Yapılacak" },
-  blocked:  { bg: "bg-red-50",     text: "text-red-700",     label: "✕ Bloke" },
-};
-const STATUS_COLORS_DARK: Record<Status, { bg: string; text: string; label: string }> = {
-  done:     { bg: "bg-emerald-900/40", text: "text-emerald-400", label: "✓ Tamamlandı" },
-  progress: { bg: "bg-blue-900/40",    text: "text-blue-400",    label: "↻ Devam" },
-  todo:     { bg: "bg-slate-700",      text: "text-slate-300",   label: "◦ Yapılacak" },
-  blocked:  { bg: "bg-red-900/40",     text: "text-red-400",     label: "✕ Bloke" },
-};
-const PRIORITY_COLORS: Record<Priority, string> = {
-  high: "text-red-500 font-bold", medium: "text-amber-500 font-semibold", low: "text-emerald-500",
-};
-const PRIORITY_LABELS: Record<Priority, string> = {
-  high: "↑ Yüksek", medium: "→ Orta", low: "↓ Düşük",
-};
-const AVATAR_COLORS: Record<string, string> = {
-  "Ahmet K.": "#3b82f6", "Zeynep M.": "#8b5cf6",
-  "Burak T.": "#10b981", "Selin A.": "#f59e0b",
-};
-const PIE_STATUS_COLORS = ["#10b981", "#3b82f6", "#cbd5e1", "#ef4444"];
-const PIE_PRIORITY_COLORS = ["#ef4444", "#f59e0b", "#10b981"];
-
-// ── useDark hook ───────────────────────────────────────────────────────────────
 function useDark() {
-  const [dark, setDark] = useState(() =>
-    document.documentElement.classList.contains("dark")
-  );
+  const [dark, setDark] = useState(() => document.documentElement.classList.contains("dark"));
   const toggleDark = () => {
     const isDark = document.documentElement.classList.contains("dark");
-    if (isDark) {
-      document.documentElement.classList.remove("dark");
-      localStorage.setItem("theme", "light");
-    } else {
-      document.documentElement.classList.add("dark");
-      localStorage.setItem("theme", "dark");
-    }
+    if (isDark) { document.documentElement.classList.remove("dark"); localStorage.setItem("theme", "light"); }
+    else { document.documentElement.classList.add("dark"); localStorage.setItem("theme", "dark"); }
     setDark(!isDark);
   };
   return { dark, toggleDark };
 }
 
-// ── Sub-components ─────────────────────────────────────────────────────────────
 function KpiCard({ label, value, sub, color = "text-slate-800 dark:text-slate-100" }: {
   label: string; value: string | number; sub?: string; color?: string;
 }) {
@@ -153,44 +75,290 @@ function SectionCard({ title, subtitle, children }: { title: string; subtitle?: 
   );
 }
 
-// ── Gerçek olmayan (örnek) veriye sahip sekmeler için uyarı rozeti ─────────────
-function DemoBadge() {
+function EmptyState({ text }: { text: string }) {
   return (
-    <div className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 px-2.5 py-1 rounded-lg mb-1">
-      ⚠ Örnek veri — gerçek sprint geçmişi henüz takip edilmiyor
-    </div>
+    <div className="py-16 text-center text-sm text-slate-400 dark:text-slate-500">{text}</div>
   );
 }
 
 const chartProps = (dark: boolean) => ({
   cartesianGrid: { stroke: dark ? "#334155" : "#f1f5f9" },
   tick: { fill: dark ? "#94a3b8" : "#64748b", fontSize: 12 },
-  tooltipStyle: dark
-    ? { backgroundColor: "#1e293b", border: "1px solid #334155", color: "#f1f5f9" }
-    : {},
+  tooltipStyle: dark ? { backgroundColor: "#1e293b", border: "1px solid #334155", color: "#f1f5f9" } : {},
 });
 
-// ── Tab Panels ─────────────────────────────────────────────────────────────────
-function BurndownPanel({ dark }: { dark: boolean }) {
-  const cp = chartProps(dark);
+const PIE_COLORS = ["#3b82f6", "#f59e0b", "#10b981", "#ef4444", "#8b5cf6", "#ec4899", "#14b8a6"];
+const PRIORITY_LABELS: Record<string, string> = { HIGH: "↑ Yüksek", MEDIUM: "→ Orta", LOW: "↓ Düşük" };
+const PRIORITY_COLORS: Record<string, string> = { HIGH: "text-red-500 font-bold", MEDIUM: "text-amber-500 font-semibold", LOW: "text-emerald-500" };
+
+function daysBetween(a: Date, b: Date) {
+  return Math.round((a.getTime() - b.getTime()) / 86400000);
+}
+
+type TabId = "sprint" | "burndown" | "burnup" | "velocity" | "cycle" | "created" | "dist" | "age";
+const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
+  { id: "sprint", label: "Sprint", icon: <Zap size={14} /> },
+  { id: "burndown", label: "Burndown", icon: <TrendingDown size={14} /> },
+  { id: "burnup", label: "Burnup", icon: <TrendingUp size={14} /> },
+  { id: "velocity", label: "Velocity", icon: <BarChart2 size={14} /> },
+  { id: "cycle", label: "Cycle Time", icon: <Clock size={14} /> },
+  { id: "created", label: "Cr. vs Res.", icon: <BarChart2 size={14} /> },
+  { id: "dist", label: "Dağılım", icon: <PieIcon size={14} /> },
+  { id: "age", label: "Ort. Yaş", icon: <LayoutGrid size={14} /> },
+];
+
+export default function Reports() {
+  const navigate = useNavigate();
+  const { projectId } = useParams<{ projectId: string }>();
+  const [activeTab, setActiveTab] = useState<TabId>("sprint");
+  const { dark, toggleDark } = useDark();
+
+  const [board, setBoard] = useState<BoardData | null>(null);
+  const [sprints, setSprints] = useState<ApiSprint[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  const token = localStorage.getItem("token");
+  const authHeaders = { Authorization: `Bearer ${token}` };
+
+  const fetchAll = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const [boardRes, sprintRes] = await Promise.all([
+        fetch(`${API_BASE}/api/project/${projectId}/board`, { headers: authHeaders }),
+        fetch(`${API_BASE}/api/sprints/project/${projectId}`, { headers: authHeaders }),
+      ]);
+      const boardData = await boardRes.json();
+      const sprintData = await sprintRes.json();
+      if (!boardRes.ok) throw new Error(boardData.error || "Proje verisi yüklenemedi.");
+      if (!sprintRes.ok) throw new Error(sprintData.error || "Sprint verisi yüklenemedi.");
+      setBoard(boardData);
+      setSprints(sprintData);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Bir hata oluştu.");
+    } finally {
+      setLoading(false);
+    }
+  }, [projectId]);
+
+  useEffect(() => { fetchAll(); }, [fetchAll]);
+
+  const allTasks: (ApiTask & { columnTitle: string })[] = useMemo(() => {
+    if (!board) return [];
+    return board.columns.flatMap((c) => c.tasks.map((t) => ({ ...t, columnTitle: c.title })));
+  }, [board]);
+
+  const activeSprint = sprints.find((s) => s.status === "ACTIVE") || null;
+  const completedSprints = useMemo(
+    () => sprints.filter((s) => s.status === "COMPLETED")
+      .sort((a, b) => new Date(b.completedAt || 0).getTime() - new Date(a.completedAt || 0).getTime()),
+    [sprints]
+  );
+
+  const activeSprintTaskIds = useMemo(() => new Set((activeSprint?.tasks || []).map((t) => t.id)), [activeSprint]);
+  const activeSprintTasksFull = useMemo(
+    () => allTasks.filter((t) => activeSprintTaskIds.has(t.id)),
+    [allTasks, activeSprintTaskIds]
+  );
+
+  const activeLabel = TABS.find((t) => t.id === activeTab)?.label ?? "";
+
+  return (
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex flex-col transition-colors duration-300">
+      <header className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 sticky top-0 z-40 transition-colors">
+        <div className="max-w-screen-xl mx-auto px-6 h-14 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <button onClick={() => navigate("/reports")}
+              className="w-8 h-8 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center justify-center text-slate-500 dark:text-slate-400 transition-colors"
+              title="Raporlar listesine dön">
+              <ArrowLeft size={16} />
+            </button>
+            <div className="h-5 w-px bg-slate-200 dark:bg-slate-700" />
+            <button onClick={() => navigate("/reports")} className="text-sm text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 transition-colors">
+              Raporlar
+            </button>
+            <span className="text-slate-300 dark:text-slate-600">›</span>
+            <span className="text-sm font-bold text-slate-800 dark:text-slate-100">{board?.title || "Proje"}</span>
+            <span className="text-slate-300 dark:text-slate-600">›</span>
+            <span className="text-sm text-slate-500 dark:text-slate-400">{activeLabel}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button onClick={toggleDark}
+              className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-yellow-400 hover:bg-slate-200 dark:hover:bg-slate-600"
+              title={dark ? "Açık moda geç" : "Koyu moda geç"}>
+              {dark ? <Sun size={15} /> : <Moon size={15} />}
+            </button>
+            <button onClick={() => navigate(`/projects/${projectId}/sprints`)}
+              className="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-600 px-3 py-1.5 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+              🏃 Sprintleri Yönet
+            </button>
+            <div className="flex items-center gap-1.5 text-xs text-slate-400 bg-blue-50 dark:bg-blue-900/30 border border-blue-100 dark:border-blue-800 px-3 py-1.5 rounded-lg">
+              <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse" />
+              {activeSprint ? `${activeSprint.name} (Aktif)` : "Aktif sprint yok"}
+            </div>
+          </div>
+        </div>
+        <div className="max-w-screen-xl mx-auto px-6 overflow-x-auto">
+          <div className="flex gap-1 pb-0">
+            {TABS.map((tab) => (
+              <button key={tab.id} onClick={() => setActiveTab(tab.id)}
+                className={`inline-flex items-center gap-1.5 px-3 py-2.5 text-[13px] font-semibold border-b-2 whitespace-nowrap transition-colors ${
+                  activeTab === tab.id
+                    ? "border-blue-600 text-blue-600 dark:text-blue-400 dark:border-blue-400"
+                    : "border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:border-slate-300 dark:hover:border-slate-600"
+                }`}>
+                {tab.icon}{tab.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </header>
+
+      <main className="flex-1 max-w-screen-xl mx-auto w-full px-6 py-6">
+        {error && <p className="text-sm text-red-600 dark:text-red-400 mb-4">{error}</p>}
+        {loading ? (
+          <p className="text-sm text-slate-400">Yükleniyor...</p>
+        ) : (
+          <>
+            {activeTab === "sprint" && (
+              <SprintPanel sprint={activeSprint} tasks={activeSprintTasksFull} onManage={() => navigate(`/projects/${projectId}/sprints`)} />
+            )}
+            {activeTab === "burndown" && <BurndownPanel sprint={activeSprint} tasks={activeSprintTasksFull} dark={dark} />}
+            {activeTab === "burnup" && <BurnupPanel sprint={activeSprint} tasks={activeSprintTasksFull} dark={dark} />}
+            {activeTab === "velocity" && <VelocityPanel sprints={completedSprints} dark={dark} />}
+            {activeTab === "cycle" && <CyclePanel tasks={allTasks} dark={dark} />}
+            {activeTab === "created" && <CreatedPanel tasks={allTasks} dark={dark} />}
+            {activeTab === "dist" && <DistPanel columns={board?.columns || []} dark={dark} />}
+            {activeTab === "age" && <AgePanel tasks={allTasks} dark={dark} />}
+          </>
+        )}
+      </main>
+    </div>
+  );
+}
+
+function SprintPanel({ sprint, tasks, onManage }: {
+  sprint: ApiSprint | null; tasks: (ApiTask & { columnTitle: string })[]; onManage: () => void;
+}) {
+  if (!sprint) {
+    return (
+      <div className="space-y-5">
+        <SectionCard title="Aktif Sprint Yok">
+          <EmptyState text='Bu projede şu anda aktif bir sprint yok. "Sprintleri Yönet" ile bir sprint başlatabilirsiniz.' />
+        </SectionCard>
+      </div>
+    );
+  }
+  const m = sprint.metrics;
   return (
     <div className="space-y-5">
-      <DemoBadge />
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <KpiCard label="Toplam SP" value={80} sub="Sprint 7" />
-        <KpiCard label="Kalan" value={28} sub="story point" color="text-blue-600 dark:text-blue-400" />
-        <KpiCard label="Tamamlanan" value={52} sub="story point" color="text-emerald-600 dark:text-emerald-400" />
-        <KpiCard label="Sprint Durumu" value="🟡 Geride" sub="4 gün kaldı" />
+        <KpiCard label="Toplam Görev" value={m.totalTasks} sub={sprint.name} />
+        <KpiCard label="Tamamlanan" value={m.completedTasks} color="text-emerald-600 dark:text-emerald-400" />
+        <KpiCard label="Taahhüt SP" value={m.committedPoints} />
+        <KpiCard label="Tamamlanma" value={`%${m.completionRate}`} color="text-blue-600 dark:text-blue-400" />
       </div>
-      <SectionCard title="Burndown Chart — Sprint 7" subtitle="Kalan iş vs ideal ilerleme çizgisi">
+      <SectionCard title={`${sprint.name} — Görev Listesi`} subtitle={sprint.goal || undefined}>
+        <div className="flex justify-end mb-3">
+          <button onClick={onManage} className="inline-flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors">
+            Görevleri Yönet
+          </button>
+        </div>
+        {tasks.length === 0 ? <EmptyState text="Bu sprinte henüz görev eklenmemiş." /> : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-[13px]">
+              <thead>
+                <tr className="bg-slate-50 dark:bg-slate-700/50 border-b border-slate-200 dark:border-slate-700">
+                  {["Görev", "Durum", "Öncelik", "Atanan", "SP"].map((h) => (
+                    <th key={h} className="text-left px-3 py-2 text-[11px] font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {tasks.map((t) => (
+                  <tr key={t.id} className="border-b border-slate-100 dark:border-slate-700 hover:bg-blue-50 dark:hover:bg-slate-700/50 transition-colors">
+                    <td className="px-3 py-2.5 text-slate-700 dark:text-slate-300">{t.title}</td>
+                    <td className="px-3 py-2.5">
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${
+                        t.isCompleted ? "bg-emerald-50 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400" : "bg-blue-50 dark:bg-blue-900/40 text-blue-700 dark:text-blue-400"
+                      }`}>
+                        {t.isCompleted ? "✓ Tamamlandı" : `◦ ${t.columnTitle}`}
+                      </span>
+                    </td>
+                    <td className={`px-3 py-2.5 text-xs ${PRIORITY_COLORS[t.priority] || ""}`}>{PRIORITY_LABELS[t.priority] || t.priority}</td>
+                    <td className="px-3 py-2.5 text-slate-600 dark:text-slate-400">{t.assignee?.name || "—"}</td>
+                    <td className="px-3 py-2.5 font-bold text-slate-700 dark:text-slate-300">{t.storyPoints ?? 0}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </SectionCard>
+    </div>
+  );
+}
+
+function useBurndownSeries(sprint: ApiSprint | null, tasks: ApiTask[]) {
+  return useMemo(() => {
+    if (!sprint || !sprint.startDate) return null;
+    const start = new Date(sprint.startDate); start.setHours(0, 0, 0, 0);
+    const end = sprint.endDate ? new Date(sprint.endDate) : new Date();
+    end.setHours(0, 0, 0, 0);
+    const totalDays = Math.max(1, daysBetween(end, start));
+    const committed = sprint.metrics.committedPoints;
+
+    const data = [];
+    for (let i = 0; i <= totalDays; i++) {
+      const d = new Date(start); d.setDate(d.getDate() + i);
+      const idealRemaining = Math.max(0, Math.round(committed - (committed * i) / totalDays));
+      const completedByDay = tasks
+        .filter((t) => t.completedAt && new Date(t.completedAt) <= d)
+        .reduce((sum, t) => sum + (t.storyPoints || 0), 0);
+      data.push({
+        day: `G${i + 1}`,
+        date: d.toLocaleDateString("tr-TR", { day: "2-digit", month: "short" }),
+        ideal: idealRemaining,
+        actual: committed - completedByDay,
+        completed: completedByDay,
+      });
+    }
+    return { data, committed };
+  }, [sprint, tasks]);
+}
+
+function BurndownPanel({ sprint, tasks, dark }: { sprint: ApiSprint | null; tasks: ApiTask[]; dark: boolean }) {
+  const cp = chartProps(dark);
+  const series = useBurndownSeries(sprint, tasks);
+
+  if (!sprint || !series) {
+    return <SectionCard title="Burndown"><EmptyState text="Burndown grafiği için aktif ve başlangıç tarihi girilmiş bir sprint gerekiyor." /></SectionCard>;
+  }
+
+  const last = series.data[series.data.length - 1];
+  const remaining = last?.actual ?? series.committed;
+  const daysLeft = sprint.endDate ? Math.max(0, daysBetween(new Date(sprint.endDate), new Date())) : null;
+  const statusLabel = sprint.metrics.completionRate >= 90 ? "🟢 İyi gidiyor"
+    : (daysLeft !== null && daysLeft <= 2 && sprint.metrics.completionRate < 70) ? "🔴 Riskli" : "🟡 Devam ediyor";
+
+  return (
+    <div className="space-y-5">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <KpiCard label="Toplam SP" value={series.committed} sub={sprint.name} />
+        <KpiCard label="Kalan" value={remaining} sub="story point" color="text-blue-600 dark:text-blue-400" />
+        <KpiCard label="Tamamlanan" value={series.committed - remaining} sub="story point" color="text-emerald-600 dark:text-emerald-400" />
+        <KpiCard label="Sprint Durumu" value={statusLabel} sub={daysLeft !== null ? `${daysLeft} gün kaldı` : "Bitiş tarihi yok"} />
+      </div>
+      <SectionCard title={`Burndown Chart — ${sprint.name}`} subtitle="Kalan iş vs ideal ilerleme çizgisi (gerçek görev tamamlanma verisiyle)">
         <ResponsiveContainer width="100%" height={280}>
-          <LineChart data={BURNDOWN_DATA}>
+          <LineChart data={series.data}>
             <CartesianGrid strokeDasharray="3 3" stroke={cp.cartesianGrid.stroke} />
-            <XAxis dataKey="day" tick={cp.tick} />
+            <XAxis dataKey="date" tick={cp.tick} />
             <YAxis tick={cp.tick} />
             <Tooltip contentStyle={cp.tooltipStyle} />
             <Legend />
-            <Line type="monotone" dataKey="actual" name="Gerçekleşen" stroke="#3b82f6" strokeWidth={2.5} dot={{ r: 4 }} />
+            <Line type="monotone" dataKey="actual" name="Gerçekleşen" stroke="#3b82f6" strokeWidth={2.5} dot={{ r: 3 }} />
             <Line type="monotone" dataKey="ideal" name="İdeal" stroke={dark ? "#475569" : "#cbd5e1"} strokeWidth={2} strokeDasharray="6 4" dot={false} />
           </LineChart>
         </ResponsiveContainer>
@@ -199,26 +367,34 @@ function BurndownPanel({ dark }: { dark: boolean }) {
   );
 }
 
-function BurnupPanel({ dark }: { dark: boolean }) {
+function BurnupPanel({ sprint, tasks, dark }: { sprint: ApiSprint | null; tasks: ApiTask[]; dark: boolean }) {
   const cp = chartProps(dark);
+  const series = useBurndownSeries(sprint, tasks);
+
+  if (!sprint || !series) {
+    return <SectionCard title="Burnup"><EmptyState text="Burnup grafiği için aktif ve başlangıç tarihi girilmiş bir sprint gerekiyor." /></SectionCard>;
+  }
+
+  const burnupData = series.data.map((d) => ({ ...d, scope: series.committed }));
+  const last = burnupData[burnupData.length - 1];
+
   return (
     <div className="space-y-5">
-      <DemoBadge />
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <KpiCard label="Toplam Hedef" value={80} />
-        <KpiCard label="Tamamlanan" value={52} color="text-emerald-600 dark:text-emerald-400" />
-        <KpiCard label="Kapsam Değişimi" value="+8" sub="SP eklendi" color="text-amber-500" />
-        <KpiCard label="İlerleme" value="65%" color="text-blue-600 dark:text-blue-400" />
+        <KpiCard label="Toplam Hedef" value={series.committed} />
+        <KpiCard label="Tamamlanan" value={last?.completed ?? 0} color="text-emerald-600 dark:text-emerald-400" />
+        <KpiCard label="İlerleme" value={`%${sprint.metrics.completionRate}`} color="text-blue-600 dark:text-blue-400" />
+        <KpiCard label="Toplam Görev" value={sprint.metrics.totalTasks} />
       </div>
-      <SectionCard title="Burnup Chart — Sprint 7" subtitle="Tamamlanan iş & kapsam çizgisi">
+      <SectionCard title={`Burnup Chart — ${sprint.name}`} subtitle="Tamamlanan iş & kapsam çizgisi (gerçek görev tamamlanma verisiyle)">
         <ResponsiveContainer width="100%" height={280}>
-          <LineChart data={BURNUP_DATA}>
+          <LineChart data={burnupData}>
             <CartesianGrid strokeDasharray="3 3" stroke={cp.cartesianGrid.stroke} />
-            <XAxis dataKey="day" tick={cp.tick} />
+            <XAxis dataKey="date" tick={cp.tick} />
             <YAxis tick={cp.tick} />
             <Tooltip contentStyle={cp.tooltipStyle} />
             <Legend />
-            <Line type="monotone" dataKey="completed" name="Tamamlanan" stroke="#3b82f6" strokeWidth={2.5} dot={{ r: 4 }} />
+            <Line type="monotone" dataKey="completed" name="Tamamlanan" stroke="#3b82f6" strokeWidth={2.5} dot={{ r: 3 }} />
             <Line type="monotone" dataKey="scope" name="Toplam Kapsam" stroke="#f59e0b" strokeWidth={2} strokeDasharray="6 4" dot={false} />
           </LineChart>
         </ResponsiveContainer>
@@ -227,93 +403,28 @@ function BurnupPanel({ dark }: { dark: boolean }) {
   );
 }
 
-function SprintPanel({ issues, onAdd, dark }: { issues: Issue[]; onAdd: () => void; dark: boolean }) {
-  const counts = useMemo(() => ({
-    done: issues.filter(i => i.status === "done").length,
-    progress: issues.filter(i => i.status === "progress").length,
-    todo: issues.filter(i => i.status === "todo").length,
-    blocked: issues.filter(i => i.status === "blocked").length,
-  }), [issues]);
-  const SC = dark ? STATUS_COLORS_DARK : STATUS_COLORS_LIGHT;
-  return (
-    <div className="space-y-5">
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <KpiCard label="Tamamlanan" value={counts.done} sub="görev" color="text-emerald-600 dark:text-emerald-400" />
-        <KpiCard label="Devam Eden" value={counts.progress} color="text-blue-600 dark:text-blue-400" />
-        <KpiCard label="Yapılacak" value={counts.todo} />
-        <KpiCard label="Bloke" value={counts.blocked} color="text-red-500" />
-      </div>
-      <SectionCard title="Görev Listesi" subtitle="Gerçek proje verisi">
-        <div className="flex justify-end mb-3">
-          <button onClick={onAdd} className="inline-flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors">
-            <Plus size={13} /> Görev Ekle
-          </button>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-[13px]">
-            <thead>
-              <tr className="bg-slate-50 dark:bg-slate-700/50 border-b border-slate-200 dark:border-slate-700">
-                {["Anahtar", "Özet", "Durum", "Öncelik", "Atanan", "SP"].map(h => (
-                  <th key={h} className="text-left px-3 py-2 text-[11px] font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {issues.length === 0 && (
-                <tr>
-                  <td colSpan={6} className="px-3 py-6 text-center text-slate-400 text-xs">
-                    Bu projede henüz görev yok.
-                  </td>
-                </tr>
-              )}
-              {issues.map(issue => {
-                const sc = SC[issue.status];
-                const initials = issue.assignee.split(" ").map(x => x[0]).join("");
-                return (
-                  <tr key={issue.key} className="border-b border-slate-100 dark:border-slate-700 hover:bg-blue-50 dark:hover:bg-slate-700/50 transition-colors">
-                    <td className="px-3 py-2.5 text-blue-600 dark:text-blue-400 font-bold text-xs">{issue.key}</td>
-                    <td className="px-3 py-2.5 text-slate-700 dark:text-slate-300">{issue.summary}</td>
-                    <td className="px-3 py-2.5">
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${sc.bg} ${sc.text}`}>
-                        {sc.label}
-                      </span>
-                    </td>
-                    <td className={`px-3 py-2.5 text-xs ${PRIORITY_COLORS[issue.priority]}`}>{PRIORITY_LABELS[issue.priority]}</td>
-                    <td className="px-3 py-2.5">
-                      <div className="flex items-center gap-2">
-                        <div className="w-6 h-6 rounded-full flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0"
-                          style={{ background: AVATAR_COLORS[issue.assignee] || "#94a3b8" }}>
-                          {initials}
-                        </div>
-                        <span className="text-slate-600 dark:text-slate-400">{issue.assignee}</span>
-                      </div>
-                    </td>
-                    <td className="px-3 py-2.5 font-bold text-slate-700 dark:text-slate-300">{issue.sp}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </SectionCard>
-    </div>
-  );
-}
-
-function VelocityPanel({ dark }: { dark: boolean }) {
+function VelocityPanel({ sprints, dark }: { sprints: ApiSprint[]; dark: boolean }) {
   const cp = chartProps(dark);
+  if (sprints.length === 0) {
+    return <SectionCard title="Velocity"><EmptyState text="Henüz tamamlanmış sprint yok. En az bir sprint tamamlandığında velocity burada görünecek." /></SectionCard>;
+  }
+  const data = [...sprints].reverse().map((s) => ({ sprint: s.name, committed: s.metrics.committedPoints, completed: s.metrics.completedPoints }));
+  const completedVals = sprints.map((s) => s.metrics.completedPoints);
+  const avg = Math.round(completedVals.reduce((a, b) => a + b, 0) / completedVals.length);
+  const max = Math.max(...completedVals);
+  const min = Math.min(...completedVals);
+
   return (
     <div className="space-y-5">
-      <DemoBadge />
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <KpiCard label="Ort. Velocity" value={58} sub="SP / sprint" color="text-blue-600 dark:text-blue-400" />
-        <KpiCard label="En Yüksek" value={72} color="text-emerald-600 dark:text-emerald-400" />
-        <KpiCard label="En Düşük" value={41} color="text-red-500" />
-        <KpiCard label="Tahmin (S8)" value={60} sub="SP önerisi" />
+        <KpiCard label="Ort. Velocity" value={avg} sub="SP / sprint" color="text-blue-600 dark:text-blue-400" />
+        <KpiCard label="En Yüksek" value={max} color="text-emerald-600 dark:text-emerald-400" />
+        <KpiCard label="En Düşük" value={min} color="text-red-500" />
+        <KpiCard label="Tamamlanan Sprint" value={sprints.length} />
       </div>
-      <SectionCard title="Velocity Chart — Son 6 Sprint">
+      <SectionCard title={`Velocity Chart — Son ${sprints.length} Sprint`} subtitle="Gerçek geçmiş sprint verisi">
         <ResponsiveContainer width="100%" height={280}>
-          <BarChart data={VELOCITY_DATA}>
+          <BarChart data={data}>
             <CartesianGrid strokeDasharray="3 3" stroke={cp.cartesianGrid.stroke} />
             <XAxis dataKey="sprint" tick={cp.tick} />
             <YAxis tick={cp.tick} />
@@ -328,57 +439,40 @@ function VelocityPanel({ dark }: { dark: boolean }) {
   );
 }
 
-function CFDPanel({ dark }: { dark: boolean }) {
+function CyclePanel({ tasks, dark }: { tasks: ApiTask[]; dark: boolean }) {
   const cp = chartProps(dark);
-  return (
-    <div className="space-y-5">
-      <DemoBadge />
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <KpiCard label="Yapılacak" value={12} />
-        <KpiCard label="Devam Eden" value={7} color="text-blue-600 dark:text-blue-400" />
-        <KpiCard label="İncelemede" value={5} color="text-amber-500" />
-        <KpiCard label="Tamamlanan" value={18} color="text-emerald-600 dark:text-emerald-400" />
-      </div>
-      <SectionCard title="Cumulative Flow Diagram" subtitle="İş durumu dağılımı (son 2 hafta)">
-        <ResponsiveContainer width="100%" height={280}>
-          <AreaChart data={CFD_DATA}>
-            <CartesianGrid strokeDasharray="3 3" stroke={cp.cartesianGrid.stroke} />
-            <XAxis dataKey="date" tick={cp.tick} />
-            <YAxis tick={cp.tick} />
-            <Tooltip contentStyle={cp.tooltipStyle} />
-            <Legend />
-            <Area type="monotone" dataKey="done" name="Tamamlanan" stackId="1" stroke="#10b981" fill={dark ? "#064e3b" : "#d1fae5"} />
-            <Area type="monotone" dataKey="review" name="İncelemede" stackId="1" stroke="#f59e0b" fill={dark ? "#78350f" : "#fef3c7"} />
-            <Area type="monotone" dataKey="progress" name="Devam Eden" stackId="1" stroke="#3b82f6" fill={dark ? "#1e3a5f" : "#dbeafe"} />
-            <Area type="monotone" dataKey="todo" name="Yapılacak" stackId="1" stroke="#93c5fd" fill={dark ? "#1e2d3d" : "#eff6ff"} />
-          </AreaChart>
-        </ResponsiveContainer>
-      </SectionCard>
-    </div>
-  );
-}
+  const completed = useMemo(() => tasks
+    .filter((t) => t.isCompleted && t.completedAt)
+    .map((t) => ({ title: t.title, completedAt: t.completedAt!, cycleTime: Math.max(0, daysBetween(new Date(t.completedAt!), new Date(t.createdAt))) }))
+    .sort((a, b) => new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime())
+    .slice(0, 30), [tasks]);
 
-function ControlPanel({ dark }: { dark: boolean }) {
-  const cp = chartProps(dark);
+  if (completed.length === 0) {
+    return <SectionCard title="Cycle Time"><EmptyState text="Henüz tamamlanmış görev yok, cycle time hesaplanamıyor." /></SectionCard>;
+  }
+
+  const times = completed.map((c) => c.cycleTime).sort((a, b) => a - b);
+  const avg = (times.reduce((a, b) => a + b, 0) / times.length).toFixed(1);
+  const median = times[Math.floor(times.length / 2)];
+  const max = times[times.length - 1];
+
   return (
     <div className="space-y-5">
-      <DemoBadge />
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <KpiCard label="Ort. Cycle Time" value="3.2" sub="gün" color="text-blue-600 dark:text-blue-400" />
-        <KpiCard label="Medyan" value="2.8" sub="gün" />
-        <KpiCard label="Maksimum" value={11} sub="gün" color="text-red-500" />
-        <KpiCard label="Anormal" value={3} sub="görev" color="text-amber-500" />
+        <KpiCard label="Ort. Cycle Time" value={avg} sub="gün" color="text-blue-600 dark:text-blue-400" />
+        <KpiCard label="Medyan" value={median} sub="gün" />
+        <KpiCard label="Maksimum" value={max} sub="gün" color="text-red-500" />
+        <KpiCard label="Örneklem" value={completed.length} sub="görev" />
       </div>
-      <SectionCard title="Control Chart — Cycle Time" subtitle="Her görevin tamamlanma süresi">
+      <SectionCard title="Cycle Time" subtitle="Her görevin oluşturulmasından tamamlanmasına kadar geçen gerçek süre">
         <ResponsiveContainer width="100%" height={280}>
           <ScatterChart>
             <CartesianGrid strokeDasharray="3 3" stroke={cp.cartesianGrid.stroke} />
             <XAxis dataKey="index" name="Görev" tick={cp.tick} />
             <YAxis dataKey="cycleTime" name="Gün" tick={cp.tick} />
             <Tooltip cursor={{ strokeDasharray: "3 3" }} contentStyle={cp.tooltipStyle} />
-            <ReferenceLine y={8} stroke="#fca5a5" strokeDasharray="5 5" label={{ value: "UCL", fontSize: 11, fill: "#ef4444" }} />
-            <ReferenceLine y={3.2} stroke="#86efac" strokeDasharray="5 5" label={{ value: "Ort.", fontSize: 11, fill: "#10b981" }} />
-            <Scatter data={CONTROL_DATA.map((d, i) => ({ ...d, index: i + 1 }))} fill="#3b82f6" />
+            <ReferenceLine y={Number(avg)} stroke="#86efac" strokeDasharray="5 5" label={{ value: "Ort.", fontSize: 11, fill: "#10b981" }} />
+            <Scatter data={completed.map((d, i) => ({ ...d, index: i + 1 }))} fill="#3b82f6" />
           </ScatterChart>
         </ResponsiveContainer>
       </SectionCard>
@@ -386,353 +480,159 @@ function ControlPanel({ dark }: { dark: boolean }) {
   );
 }
 
-function CreatedPanel({ dark }: { dark: boolean }) {
+function CreatedPanel({ tasks, dark }: { tasks: ApiTask[]; dark: boolean }) {
   const cp = chartProps(dark);
+  const data = useMemo(() => {
+    const months: { key: string; label: string; created: number; resolved: number }[] = [];
+    const now = new Date();
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      months.push({ key: `${d.getFullYear()}-${d.getMonth()}`, label: d.toLocaleDateString("tr-TR", { month: "short" }), created: 0, resolved: 0 });
+    }
+    const findMonth = (dateStr: string) => {
+      const d = new Date(dateStr);
+      return months.find((m) => m.key === `${d.getFullYear()}-${d.getMonth()}`);
+    };
+    tasks.forEach((t) => {
+      const cm = findMonth(t.createdAt);
+      if (cm) cm.created++;
+      if (t.completedAt) {
+        const rm = findMonth(t.completedAt);
+        if (rm) rm.resolved++;
+      }
+    });
+    return months;
+  }, [tasks]);
+
+  const totalCreated = data.reduce((s, m) => s + m.created, 0);
+  const totalResolved = data.reduce((s, m) => s + m.resolved, 0);
+
   return (
     <div className="space-y-5">
-      <DemoBadge />
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <KpiCard label="Toplam Açılan" value={94} />
-        <KpiCard label="Toplam Çözülen" value={78} color="text-emerald-600 dark:text-emerald-400" />
-        <KpiCard label="Birikmiş" value={16} color="text-red-500" />
-        <KpiCard label="Çözüm Oranı" value="83%" color="text-blue-600 dark:text-blue-400" />
+        <KpiCard label="Oluşturulan (6 ay)" value={totalCreated} />
+        <KpiCard label="Çözülen (6 ay)" value={totalResolved} color="text-emerald-600 dark:text-emerald-400" />
+        <KpiCard label="Net Değişim" value={totalCreated - totalResolved} color={totalCreated > totalResolved ? "text-red-500" : "text-emerald-600 dark:text-emerald-400"} />
+        <KpiCard label="Toplam Görev" value={tasks.length} />
       </div>
-      <SectionCard title="Created vs Resolved Issues">
+      <SectionCard title="Oluşturulan vs Çözülen" subtitle="Son 6 ay, gerçek görev tarihleri">
         <ResponsiveContainer width="100%" height={280}>
-          <LineChart data={CREATED_DATA}>
+          <BarChart data={data}>
             <CartesianGrid strokeDasharray="3 3" stroke={cp.cartesianGrid.stroke} />
-            <XAxis dataKey="month" tick={cp.tick} />
+            <XAxis dataKey="label" tick={cp.tick} />
             <YAxis tick={cp.tick} />
             <Tooltip contentStyle={cp.tooltipStyle} />
             <Legend />
-            <Line type="monotone" dataKey="created" name="Açılan" stroke="#ef4444" strokeWidth={2.5} dot={{ r: 4 }} />
-            <Line type="monotone" dataKey="resolved" name="Çözülen" stroke="#10b981" strokeWidth={2.5} dot={{ r: 4 }} />
-          </LineChart>
+            <Bar dataKey="created" name="Oluşturulan" fill={dark ? "#f59e0b" : "#fbbf24"} radius={[4, 4, 0, 0]} />
+            <Bar dataKey="resolved" name="Çözülen" fill="#10b981" radius={[4, 4, 0, 0]} />
+          </BarChart>
         </ResponsiveContainer>
       </SectionCard>
     </div>
   );
 }
 
-function PiePanel({ issues, dark }: { issues: Issue[]; dark: boolean }) {
-  const statusCounts = useMemo(() => [
-    { name: "Tamamlanan", value: issues.filter(i => i.status === "done").length },
-    { name: "Devam Eden", value: issues.filter(i => i.status === "progress").length },
-    { name: "Yapılacak", value: issues.filter(i => i.status === "todo").length },
-    { name: "Bloke", value: issues.filter(i => i.status === "blocked").length },
-  ], [issues]);
-  const priorityCounts = useMemo(() => [
-    { name: "Yüksek", value: issues.filter(i => i.priority === "high").length },
-    { name: "Orta", value: issues.filter(i => i.priority === "medium").length },
-    { name: "Düşük", value: issues.filter(i => i.priority === "low").length },
-  ], [issues]);
+function DistPanel({ columns, dark }: { columns: ApiColumn[]; dark: boolean }) {
   const cp = chartProps(dark);
+  const data = columns.map((c) => ({ name: c.title, value: c.tasks.length }));
+  const total = data.reduce((s, d) => s + d.value, 0);
+
+  if (total === 0) {
+    return <SectionCard title="Dağılım"><EmptyState text="Bu projede henüz görev yok." /></SectionCard>;
+  }
+
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <KpiCard label="Toplam Görev" value={issues.length} />
-        <KpiCard label="Tamamlanan" value={statusCounts[0].value} color="text-emerald-600 dark:text-emerald-400" />
-        <KpiCard label="Devam Eden" value={statusCounts[1].value} color="text-blue-600 dark:text-blue-400" />
-        <KpiCard label="Yapılacak" value={statusCounts[2].value} />
+        <KpiCard label="Toplam Görev" value={total} />
+        {data.slice(0, 3).map((d) => (
+          <KpiCard key={d.name} label={d.name} value={d.value} />
+        ))}
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-        <SectionCard title="Durum Dağılımı">
-          <ResponsiveContainer width="100%" height={220}>
-            <PieChart>
-              <Pie data={statusCounts} cx="50%" cy="50%" innerRadius={55} outerRadius={90} paddingAngle={3} dataKey="value">
-                {statusCounts.map((_, i) => <Cell key={i} fill={PIE_STATUS_COLORS[i]} />)}
-              </Pie>
-              <Tooltip contentStyle={cp.tooltipStyle} />
-              <Legend />
-            </PieChart>
-          </ResponsiveContainer>
-        </SectionCard>
-        <SectionCard title="Öncelik Dağılımı">
-          <ResponsiveContainer width="100%" height={220}>
-            <PieChart>
-              <Pie data={priorityCounts} cx="50%" cy="50%" innerRadius={55} outerRadius={90} paddingAngle={3} dataKey="value">
-                {priorityCounts.map((_, i) => <Cell key={i} fill={PIE_PRIORITY_COLORS[i]} />)}
-              </Pie>
-              <Tooltip contentStyle={cp.tooltipStyle} />
-              <Legend />
-            </PieChart>
-          </ResponsiveContainer>
-        </SectionCard>
-      </div>
+      <SectionCard title="Kolon Bazlı Dağılım" subtitle="Panodaki güncel görev dağılımı">
+        <ResponsiveContainer width="100%" height={260}>
+          <PieChart>
+            <Pie data={data} cx="50%" cy="50%" innerRadius={55} outerRadius={90} paddingAngle={3} dataKey="value">
+              {data.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
+            </Pie>
+            <Tooltip contentStyle={cp.tooltipStyle} />
+            <Legend />
+          </PieChart>
+        </ResponsiveContainer>
+      </SectionCard>
     </div>
   );
 }
 
-function AgePanel({ issues, dark }: { issues: Issue[]; dark: boolean }) {
-  const oldIssues = useMemo(() =>
-    issues.filter(i => i.age >= 7 && i.status !== "done").sort((a, b) => b.age - a.age),
-    [issues]
-  );
+function AgePanel({ tasks, dark }: { tasks: (ApiTask & { columnTitle: string })[]; dark: boolean }) {
   const cp = chartProps(dark);
-  const SC = dark ? STATUS_COLORS_DARK : STATUS_COLORS_LIGHT;
+  const now = new Date();
+  const openTasks = useMemo(() => tasks
+    .filter((t) => !t.isCompleted)
+    .map((t) => ({ ...t, age: Math.max(0, daysBetween(now, new Date(t.createdAt))) }))
+    .sort((a, b) => b.age - a.age), [tasks]);
+
+  const byColumn = useMemo(() => {
+    const map = new Map<string, number[]>();
+    openTasks.forEach((t) => {
+      if (!map.has(t.columnTitle)) map.set(t.columnTitle, []);
+      map.get(t.columnTitle)!.push(t.age);
+    });
+    return Array.from(map.entries()).map(([status, ages]) => ({
+      status, avgAge: Math.round((ages.reduce((a, b) => a + b, 0) / ages.length) * 10) / 10,
+    }));
+  }, [openTasks]);
+
+  if (openTasks.length === 0) {
+    return <SectionCard title="Ortalama Yaş"><EmptyState text="Açık (tamamlanmamış) görev yok." /></SectionCard>;
+  }
+
+  const avgAge = (openTasks.reduce((s, t) => s + t.age, 0) / openTasks.length).toFixed(1);
+  const oldest = openTasks[0]?.age ?? 0;
+  const critical = openTasks.filter((t) => t.age > 14).length;
+  const oldIssues = openTasks.filter((t) => t.age >= 7);
+
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <KpiCard label="Ort. Yaş" value="8.4" sub="gün" color="text-amber-500" />
-        <KpiCard label="En Yaşlı" value={24} sub="gün" color="text-red-500" />
-        <KpiCard label="Kritik (>14g)" value={oldIssues.filter(i => i.age > 14).length} color="text-red-500" />
-        <KpiCard label="Toplam Açık" value={issues.filter(i => i.status !== "done").length} />
+        <KpiCard label="Ort. Yaş" value={avgAge} sub="gün" color="text-amber-500" />
+        <KpiCard label="En Yaşlı" value={oldest} sub="gün" color="text-red-500" />
+        <KpiCard label="Kritik (>14g)" value={critical} color="text-red-500" />
+        <KpiCard label="Toplam Açık" value={openTasks.length} />
       </div>
-      <SectionCard title="Average Age Report" subtitle="Durum bazında ortalama yaş (örnek dağılım)">
-        <ResponsiveContainer width="100%" height={220}>
-          <BarChart data={AGE_DATA} layout="vertical">
+      <SectionCard title="Kolon Bazında Ortalama Yaş">
+        <ResponsiveContainer width="100%" height={Math.max(160, byColumn.length * 50)}>
+          <BarChart data={byColumn} layout="vertical">
             <CartesianGrid strokeDasharray="3 3" stroke={cp.cartesianGrid.stroke} />
             <XAxis type="number" tick={cp.tick} unit=" gün" />
-            <YAxis dataKey="status" type="category" tick={cp.tick} width={90} />
+            <YAxis dataKey="status" type="category" tick={cp.tick} width={100} />
             <Tooltip contentStyle={cp.tooltipStyle} />
             <Bar dataKey="avgAge" name="Ort. Yaş" fill="#60a5fa" radius={[0, 4, 4, 0]} />
           </BarChart>
         </ResponsiveContainer>
       </SectionCard>
-      <SectionCard title="Uzun Süredir Bekleyen Görevler" subtitle="Gerçek proje verisi">
+      <SectionCard title="Uzun Süredir Bekleyen Görevler">
         <div className="overflow-x-auto">
           <table className="w-full text-[13px]">
             <thead>
               <tr className="bg-slate-50 dark:bg-slate-700/50 border-b border-slate-200 dark:border-slate-700">
-                {["Anahtar", "Özet", "Durum", "Yaş"].map(h => (
+                {["Görev", "Kolon", "Yaş"].map((h) => (
                   <th key={h} className="text-left px-3 py-2 text-[11px] font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {oldIssues.length === 0 && (
-                <tr>
-                  <td colSpan={4} className="px-3 py-6 text-center text-slate-400 text-xs">
-                    7 günden eski, tamamlanmamış görev yok.
-                  </td>
+              {oldIssues.map((t) => (
+                <tr key={t.id} className="border-b border-slate-100 dark:border-slate-700 hover:bg-blue-50 dark:hover:bg-slate-700/50 transition-colors">
+                  <td className="px-3 py-2.5 text-slate-700 dark:text-slate-300">{t.title}</td>
+                  <td className="px-3 py-2.5 text-slate-500 dark:text-slate-400">{t.columnTitle}</td>
+                  <td className={`px-3 py-2.5 font-bold ${t.age >= 14 ? "text-red-500" : "text-amber-500"}`}>{t.age} gün</td>
                 </tr>
-              )}
-              {oldIssues.map(issue => {
-                const sc = SC[issue.status];
-                return (
-                  <tr key={issue.key} className="border-b border-slate-100 dark:border-slate-700 hover:bg-blue-50 dark:hover:bg-slate-700/50 transition-colors">
-                    <td className="px-3 py-2.5 text-blue-600 dark:text-blue-400 font-bold text-xs">{issue.key}</td>
-                    <td className="px-3 py-2.5 text-slate-700 dark:text-slate-300">{issue.summary}</td>
-                    <td className="px-3 py-2.5">
-                      <span className={`inline-flex px-2 py-0.5 rounded-full text-[11px] font-semibold ${sc.bg} ${sc.text}`}>
-                        {sc.label}
-                      </span>
-                    </td>
-                    <td className={`px-3 py-2.5 font-bold ${issue.age >= 14 ? "text-red-500" : issue.age >= 7 ? "text-amber-500" : "text-slate-700 dark:text-slate-300"}`}>
-                      {issue.age} gün
-                    </td>
-                  </tr>
-                );
-              })}
+              ))}
             </tbody>
           </table>
         </div>
       </SectionCard>
-    </div>
-  );
-}
-
-// ── Add Issue Modal ────────────────────────────────────────────────────────────
-function AddIssueModal({ onClose, onAdd }: { onClose: () => void; onAdd: (issue: Issue) => void }) {
-  const [summary, setSummary] = useState("");
-  const [status, setStatus] = useState<Status>("todo");
-  const [priority, setPriority] = useState<Priority>("medium");
-  const [assignee, setAssignee] = useState("Ahmet K.");
-  const [sp, setSp] = useState(3);
-  const handleSubmit = () => {
-    if (!summary.trim()) return;
-    onAdd({
-      key: `PROJ-${Math.floor(Math.random() * 900) + 100}`,
-      summary: summary.trim(),
-      status, priority, assignee, sp, age: 0,
-    });
-    onClose();
-  };
-  return (
-    <div className="fixed inset-0 bg-slate-900/50 z-50 flex items-center justify-center p-4" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="bg-white dark:bg-slate-800 rounded-2xl w-full max-w-md shadow-2xl transition-colors">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-700">
-          <h3 className="font-bold text-slate-800 dark:text-slate-100 text-[15px]">Yeni Görev Oluştur</h3>
-          <button onClick={onClose} className="w-7 h-7 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center justify-center text-slate-400 transition-colors">
-            <X size={16} />
-          </button>
-        </div>
-        <div className="p-6 space-y-4">
-          <div>
-            <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5">Özet *</label>
-            <input value={summary} onChange={e => setSummary(e.target.value)}
-              className="w-full border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-900 transition"
-              placeholder="Görev başlığını girin..." />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            {[
-              { label: "Durum", value: status, onChange: (v: string) => setStatus(v as Status), options: [["todo","Yapılacak"],["progress","Devam Ediyor"],["done","Tamamlandı"],["blocked","Bloke"]] },
-              { label: "Öncelik", value: priority, onChange: (v: string) => setPriority(v as Priority), options: [["high","Yüksek"],["medium","Orta"],["low","Düşük"]] },
-              { label: "Atanan", value: assignee, onChange: (v: string) => setAssignee(v), options: Object.keys(AVATAR_COLORS).map(a => [a, a]) },
-            ].map(({ label, value, onChange, options }) => (
-              <div key={label}>
-                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5">{label}</label>
-                <select value={value} onChange={e => onChange(e.target.value)}
-                  className="w-full border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500 transition">
-                  {options.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-                </select>
-              </div>
-            ))}
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5">Story Points</label>
-              <input type="number" min={1} max={21} value={sp} onChange={e => setSp(Number(e.target.value))}
-                className="w-full border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500 transition" />
-            </div>
-          </div>
-          <div className="flex gap-2 justify-end pt-2">
-            <button onClick={onClose} className="px-4 py-2 text-sm font-semibold text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
-              İptal
-            </button>
-            <button onClick={handleSubmit} className="px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors">
-              Görev Ekle
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ── Tab Config ─────────────────────────────────────────────────────────────────
-type TabId = "burndown" | "burnup" | "sprint" | "velocity" | "cfd" | "control" | "created" | "pie" | "age";
-const TABS: { id: TabId; label: string; icon: React.ReactNode; group: string }[] = [
-  { id: "burndown", label: "Burndown",    icon: <TrendingDown size={14} />, group: "Sprint & Agile" },
-  { id: "burnup",   label: "Burnup",      icon: <TrendingUp size={14} />,   group: "Sprint & Agile" },
-  { id: "sprint",   label: "Sprint",      icon: <Zap size={14} />,          group: "Sprint & Agile" },
-  { id: "velocity", label: "Velocity",    icon: <BarChart2 size={14} />,    group: "Sprint & Agile" },
-  { id: "cfd",      label: "Flow",        icon: <Layers size={14} />,       group: "Süreç" },
-  { id: "control",  label: "Control",     icon: <GitMerge size={14} />,     group: "Süreç" },
-  { id: "created",  label: "Cr. vs Res.", icon: <RefreshCw size={14} />,    group: "Analiz" },
-  { id: "pie",      label: "Pie Chart",   icon: <PieIcon size={14} />,      group: "Analiz" },
-  { id: "age",      label: "Avg. Age",    icon: <Clock size={14} />,        group: "Analiz" },
-];
-
-// ── Main Page ──────────────────────────────────────────────────────────────────
-export default function Reports() {
-  const navigate = useNavigate();
-  const { projectId } = useParams<{ projectId: string }>();
-  const [activeTab, setActiveTab] = useState<TabId>("burndown");
-  const [issues, setIssues] = useState<Issue[]>([]);
-  const [projectTitle, setProjectTitle] = useState("Yükleniyor...");
-  const [showModal, setShowModal] = useState(false);
-  const { dark, toggleDark } = useDark();
-
-  useEffect(() => {
-    if (!projectId) return;
-    const token = localStorage.getItem("token");
-
-    fetch(`${API_BASE}/api/project/${projectId}/board`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then((res) => res.json())
-      .then((data) => {
-        setProjectTitle(data.title || "Proje");
-
-        const allTasks = (data.columns || []).flatMap((col: any) => col.tasks || []);
-
-        const mappedIssues: Issue[] = allTasks.map((t: any) => {
-          const ageDays = Math.floor(
-            (Date.now() - new Date(t.createdAt).getTime()) / (1000 * 60 * 60 * 24)
-          );
-          return {
-            key: t.id.slice(0, 8).toUpperCase(),
-            summary: t.title,
-            status: t.isCompleted ? "done" : t.isTracking ? "progress" : "todo",
-            priority: (t.priority || "MEDIUM").toLowerCase() as Priority,
-            assignee: t.assignee?.name || "Atanmamış",
-            sp: t.priority === "HIGH" ? 8 : t.priority === "MEDIUM" ? 5 : 3,
-            age: ageDays,
-          };
-        });
-
-        setIssues(mappedIssues);
-      })
-      .catch(() => setIssues([]));
-  }, [projectId]);
-
-  const addIssue = (issue: Issue) => setIssues(prev => [...prev, issue]);
-  const activeLabel = TABS.find(t => t.id === activeTab)?.label ?? "";
-
-  return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex flex-col transition-colors duration-300">
-      {/* Top bar */}
-      <header className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 sticky top-0 z-40 transition-colors">
-        <div className="max-w-screen-xl mx-auto px-6 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => navigate("/reports")}
-              className="w-8 h-8 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center justify-center text-slate-500 dark:text-slate-400 transition-colors"
-              title="Raporlar listesine dön"
-            >
-              <ArrowLeft size={16} />
-            </button>
-            <div className="h-5 w-px bg-slate-200 dark:bg-slate-700" />
-            <button
-              onClick={() => navigate("/reports")}
-              className="text-sm text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
-            >
-              Raporlar
-            </button>
-            <span className="text-slate-300 dark:text-slate-600">›</span>
-            <span className="text-sm font-bold text-slate-800 dark:text-slate-100">{projectTitle}</span>
-            <span className="text-slate-300 dark:text-slate-600">›</span>
-            <span className="text-sm text-slate-500 dark:text-slate-400">{activeLabel}</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={toggleDark}
-              className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-yellow-400 hover:bg-slate-200 dark:hover:bg-slate-600"
-              title={dark ? "Açık moda geç" : "Koyu moda geç"}
-            >
-              {dark ? <Sun size={15} /> : <Moon size={15} />}
-            </button>
-            <button onClick={() => setShowModal(true)}
-              className="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-600 px-3 py-1.5 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
-              <Plus size={14} /> Görev Ekle
-            </button>
-            <div className="flex items-center gap-1.5 text-xs text-slate-400 bg-blue-50 dark:bg-blue-900/30 border border-blue-100 dark:border-blue-800 px-3 py-1.5 rounded-lg">
-              <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse" />
-              {projectTitle} · {issues.length} görev
-            </div>
-          </div>
-        </div>
-        {/* Tab bar */}
-        <div className="max-w-screen-xl mx-auto px-6 overflow-x-auto">
-          <div className="flex gap-1 pb-0">
-            {TABS.map(tab => (
-              <button key={tab.id} onClick={() => setActiveTab(tab.id)}
-                className={`inline-flex items-center gap-1.5 px-3 py-2.5 text-[13px] font-semibold border-b-2 whitespace-nowrap transition-colors ${
-                  activeTab === tab.id
-                    ? "border-blue-600 text-blue-600 dark:text-blue-400 dark:border-blue-400"
-                    : "border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:border-slate-300 dark:hover:border-slate-600"
-                }`}>
-                {tab.icon}
-                {tab.label}
-              </button>
-            ))}
-          </div>
-        </div>
-      </header>
-
-      {/* Content */}
-      <main className="flex-1 max-w-screen-xl mx-auto w-full px-6 py-6">
-        {activeTab === "burndown" && <BurndownPanel dark={dark} />}
-        {activeTab === "burnup"   && <BurnupPanel dark={dark} />}
-        {activeTab === "sprint"   && <SprintPanel issues={issues} onAdd={() => setShowModal(true)} dark={dark} />}
-        {activeTab === "velocity" && <VelocityPanel dark={dark} />}
-        {activeTab === "cfd"      && <CFDPanel dark={dark} />}
-        {activeTab === "control"  && <ControlPanel dark={dark} />}
-        {activeTab === "created"  && <CreatedPanel dark={dark} />}
-        {activeTab === "pie"      && <PiePanel issues={issues} dark={dark} />}
-        {activeTab === "age"      && <AgePanel issues={issues} dark={dark} />}
-      </main>
-
-      {showModal && <AddIssueModal onClose={() => setShowModal(false)} onAdd={addIssue} />}
     </div>
   );
 }

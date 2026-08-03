@@ -3,6 +3,7 @@ const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
 const app = express();
+app.set("trust proxy", 1);
 
 const authRoutes = require("./src/routes/authRoutes");
 const projectRoutes = require("./src/routes/projectRoutes");
@@ -16,6 +17,7 @@ const notFound = require("./src/middleware/notFound");
 const errorHandler = require("./src/middleware/errorHandler");
 const sessionRoutes = require("./src/routes/sessionRoutes");
 const documentRoutes = require("./src/routes/documentRoutes");
+const personalTaskRoutes = require("./src/routes/personalTaskRoutes");
 const sprintRoutes = require("./src/routes/sprintRoutes");
 
 const allowedOrigins = process.env.FRONTEND_URL
@@ -44,6 +46,7 @@ app.use("/api/tasks", taskRoutes);
 app.use("/api/payments", paymentRoutes);
 app.use("/api/sessions", sessionRoutes);
 app.use("/api/documents", documentRoutes);
+app.use("/api/personal-tasks", personalTaskRoutes);
 app.use("/api/sprints", sprintRoutes);
 
 app.get("/", (req, res) => {
