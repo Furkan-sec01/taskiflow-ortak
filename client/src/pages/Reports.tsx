@@ -10,8 +10,9 @@ import {
   ArrowLeft, TrendingDown, TrendingUp,
   BarChart2, Zap, PieChart as PieIcon, Clock, Moon, Sun, LayoutGrid,
 } from "lucide-react";
+import { API_BASE } from "../config/api";
+import { useTheme } from "../context/ThemeContext";
 
-const API_BASE = "http://localhost:5000";
 
 interface ApiTask {
   id: string;
@@ -40,15 +41,14 @@ interface ApiSprint {
   metrics: { totalTasks: number; completedTasks: number; committedPoints: number; completedPoints: number; completionRate: number };
 }
 
+// Bu hook eskiden <html> sınıfını doğrudan değiştirip tercihi "theme"
+// anahtarına yazıyordu; uygulamanın geri kalanı ise ThemeContext ("darkMode")
+// kullanıyor. İki sistem çakışıyor, buradan yapılan seçim ilk tema
+// değişiminde geri alınıyor ve sayfa yenilenince kayboluyordu. Artık aynı
+// context'in üzerine ince bir sarmalayıcı; dışarıdaki arayüz aynı kaldı.
 function useDark() {
-  const [dark, setDark] = useState(() => document.documentElement.classList.contains("dark"));
-  const toggleDark = () => {
-    const isDark = document.documentElement.classList.contains("dark");
-    if (isDark) { document.documentElement.classList.remove("dark"); localStorage.setItem("theme", "light"); }
-    else { document.documentElement.classList.add("dark"); localStorage.setItem("theme", "dark"); }
-    setDark(!isDark);
-  };
-  return { dark, toggleDark };
+  const { darkMode, setDarkMode } = useTheme();
+  return { dark: darkMode, toggleDark: () => setDarkMode(!darkMode) };
 }
 
 function KpiCard({ label, value, sub, color = "text-slate-800 dark:text-slate-100" }: {

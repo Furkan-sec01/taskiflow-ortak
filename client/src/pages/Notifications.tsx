@@ -1,6 +1,15 @@
 import toast from "react-hot-toast";
 import { useState, useEffect } from "react";
-import { Bell, CheckCircle, AlertTriangle, Info, Trash2, CheckCheck, Filter } from "lucide-react";
+import {
+  Bell,
+  CheckCircle,
+  AlertTriangle,
+  Info,
+  Trash2,
+  CheckCheck,
+  Filter,
+} from "lucide-react";
+import { API_BASE } from "../config/api";
 
 interface Notification {
   id: string;
@@ -28,103 +37,136 @@ const Notifications = () => {
     if (storedUser) {
       try {
         const user = JSON.parse(storedUser);
-        const userId = user.id || user.user?.id;
-        if (userId) {
-          fetch(`http://localhost:5000/api/notifications?userId=${userId}`, {
-            headers: { Authorization: `Bearer ${localStorage.getItem("token")}` }
-          })
-            .then(res => res.json())
-           .then(data => {
-  setNotifications(
-    data.map((n: any) => ({
-      ...n,
-      isRead: n.isRead ?? false,
-      time: new Date(n.createdAt).toLocaleString("tr-TR"),
-    }))
-  );
-  setLoading(false);
-})
-            .catch(err => { console.error(err); setLoading(false); });
-        } else { setLoading(false); }
-      } catch { setLoading(false); }
-    } else { setLoading(false); }
+        const userId = user.id || user.user?.id; // user.user?.id kaldıralabilir
+        async function fetchNotifications() {
+          setLoading(true);
+          try {
+            // 30-40 saniyede bir polling eklenebilir
+            const res = await fetch(
+              `${API_BASE}/api/notifications?userId=${userId}`,
+              {
+                headers: {
+                  Authorization: `Bearer ${localStorage.getItem("token")}`,
+                },
+              },
+            );
+            const data = await res.json();
+            setNotifications(
+              data.map((n: any) => ({
+                ...n,
+                isRead: n.isRead ?? false,
+                time: new Date(n.createdAt).toLocaleString("tr-TR"),
+              })),
+            );
+          } catch (err) {
+            console.log(err);
+          } finally {
+            setLoading(false);
+          }
+        }
+        fetchNotifications();
+        // if (userId) {
+        //   fetch(`${API_BASE}/api/notifications?userId=${userId}`, {
+        //     headers: {
+        //       Authorization: `Bearer ${localStorage.getItem("token")}`,
+        //     },
+        //   })
+        //     .then((res) => res.json()) //async function olarak refaktörle
+        //     .then((data) => {
+        //       setNotifications(
+        //         data.map((n: any) => ({ ...n, isRead: n.isRead ?? false })),
+        //       );
+        //       setLoading(false);
+        //     })
+        //     .catch((err) => {
+        //       console.error(err);
+        //       setLoading(false);
+        //     });
+        // } else {
+        //   setLoading(false);
+        // }
+      } catch {
+        setLoading(false);
+      }
+    } else {
+      setLoading(false);
+    }
   }, []);
 
   const markAsRead = (id: string) => {
-  setNotifications(prev => prev.map(n => n.id === id ? { ...n, isRead: true } : n));
-
-  fetch(`http://localhost:5000/api/notifications/${id}/read`, {
-    method: "PATCH",
-    headers: {
-      Authorization: `Bearer ${localStorage.getItem("token")}`,
-    },
-  }).catch(console.error);
-};
-
-  const markAllAsRead = () => {
-  setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
-
-  fetch(`http://localhost:5000/api/notifications/read-all`, {
-    method: "PATCH",
-    headers: {
-      Authorization: `Bearer ${localStorage.getItem("token")}`,
-    },
-  }).catch(console.error);
-};
-
-const respondInvite = async (
-  notificationId: string,
-  action: "ACCEPT" | "REJECT"
-) => {
-  try {
-    const res = await fetch(
-      "http://localhost:5000/api/notifications/respond-invite",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
-        },
-        body: JSON.stringify({
-          notificationId,
-          action,
-        }),
-      }
+    setNotifications((prev) =>
+      prev.map((n) => (n.id === id ? { ...n, isRead: true } : n)),
     );
 
-    const data = await res.json();
+    fetch(`${API_BASE}/api/notifications/${id}/read`, {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${localStorage.getItem("token")}`,
+      },
+    }).catch(console.error);
+  };
 
-    if (res.ok) {
-      toast.success(
-        action === "ACCEPT"
-          ? "Ekibe katıldınız."
-          : "Davet reddedildi."
+  const markAllAsRead = () => {
+    setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+
+    fetch(`${API_BASE}/api/notifications/read-all`, {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${localStorage.getItem("token")}`,
+      },
+    }).catch(console.error);
+  };
+
+  const respondInvite = async (
+    notificationId: string,
+    action: "ACCEPT" | "REJECT"
+  ) => {
+    try {
+      const res = await fetch(
+        `${API_BASE}/api/notifications/respond-invite`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+          },
+          body: JSON.stringify({
+            notificationId,
+            action,
+          }),
+        }
       );
 
-      setNotifications((prev) =>
-        prev.filter((n) => n.id !== notificationId)
-      );
+      const data = await res.json();
 
-    } else {
-      toast.error(data.error || "İşlem başarısız.");
+      if (res.ok) {
+        toast.success(
+          action === "ACCEPT" ? "Ekibe katıldınız." : "Davet reddedildi."
+        );
+
+        setNotifications((prev) =>
+          prev.filter((n) => n.id !== notificationId)
+        );
+      } else {
+        toast.error(data.error || "İşlem başarısız.");
+      }
+    } catch {
+      toast.error("Sunucu bağlantı hatası.");
     }
-  } catch {
-    toast.error("Sunucu bağlantı hatası.");
-  }
-};
+  };
 
-const deleteNotification = async (id: string) => {
+  const deleteNotification = async (id: string) => {
     // 1. Önce anlık olarak arayüzden kaldırıyoruz
     const previousNotifications = [...notifications];
-    setNotifications(prev => prev.filter(n => n.id !== id));
+    setNotifications((prev) => prev.filter((n) => n.id !== id));
 
     try {
-      const res = await fetch(`http://localhost:5000/api/notifications/${id}`, {
+      const res = await fetch(`${API_BASE}/api/notifications/${id}`, {
         method: "DELETE",
         headers: {
-          "Authorization": `Bearer ${localStorage.getItem("token")}`,
-          "Content-Type": "application/json"
-        }
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+          "Content-Type": "application/json",
+        },
       });
 
       if (!res.ok) {
@@ -133,7 +175,6 @@ const deleteNotification = async (id: string) => {
 
       // Silme başarılı olunca sayfayı yeniliyoruz
       window.location.reload();
-
     } catch (error) {
       console.error("Silme hatası:", error);
       // Sunucuda silinemezse eski listeyi geri yüklüyoruz
@@ -142,13 +183,13 @@ const deleteNotification = async (id: string) => {
     }
   };
 
-  const filteredNotifications = notifications.filter(n => {
+  const filteredNotifications = notifications.filter((n) => {
     if (filter === "okunmadı") return !n.isRead;
     if (filter === "uyarı") return n.type === "alert";
     return true;
   });
 
-  const unreadCount = notifications.filter(n => !n.isRead).length;
+  const unreadCount = notifications.filter((n) => !n.isRead).length;
 
   const getIcon = (type: string) => {
     if (type === "success") return <CheckCircle size={20} />;
@@ -157,8 +198,10 @@ const deleteNotification = async (id: string) => {
   };
 
   const getIconStyle = (type: string) => {
-    if (type === "success") return "bg-green-100 dark:bg-green-900 text-green-600 dark:text-green-400";
-    if (type === "alert") return "bg-red-100 dark:bg-red-900 text-red-600 dark:text-red-400";
+    if (type === "success")
+      return "bg-green-100 dark:bg-green-900 text-green-600 dark:text-green-400";
+    if (type === "alert")
+      return "bg-red-100 dark:bg-red-900 text-red-600 dark:text-red-400";
     return "bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-400";
   };
 
@@ -171,7 +214,6 @@ const deleteNotification = async (id: string) => {
   return (
     <main className="flex-1 p-8 overflow-y-auto bg-gray-50 dark:bg-gray-900 min-h-screen transition-colors duration-300">
       <div className="max-w-3xl mx-auto">
-
         {/* Başlık */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
@@ -179,9 +221,13 @@ const deleteNotification = async (id: string) => {
               <Bell size={20} />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Bildirimler</h1>
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+                Bildirimler
+              </h1>
               <p className="text-sm text-gray-400">
-                {unreadCount > 0 ? `${unreadCount} okunmamış bildirim` : "Tüm bildirimler okundu"}
+                {unreadCount > 0
+                  ? `${unreadCount} okunmamış bildirim`
+                  : "Tüm bildirimler okundu"}
               </p>
             </div>
           </div>
@@ -199,7 +245,7 @@ const deleteNotification = async (id: string) => {
         {/* Filtreler */}
         <div className="flex items-center gap-2 mb-6">
           <Filter size={15} className="text-gray-400" />
-          {filterButtons.map(btn => (
+          {filterButtons.map((btn) => (
             <button
               key={btn.value}
               onClick={() => setFilter(btn.value)}
@@ -233,73 +279,82 @@ const deleteNotification = async (id: string) => {
               <p className="text-sm mt-1">Şu an gösterilecek bir şey yok.</p>
             </div>
           ) : (
-            filteredNotifications.map(notif => (
+            filteredNotifications.map((notif) => (
               <div
                 key={notif.id}
                 onClick={() => !notif.isRead && markAsRead(notif.id)}
                 className={`group relative p-5 rounded-2xl border transition-all cursor-pointer
-                  ${notif.isRead
-                    ? "bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700 shadow-sm opacity-75"
-                    : "bg-white dark:bg-gray-800 border-blue-100 dark:border-blue-800 shadow-md hover:shadow-lg"
+                  ${
+                    notif.isRead
+                      ? "bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700 shadow-sm opacity-75"
+                      : "bg-white dark:bg-gray-800 border-blue-100 dark:border-blue-800 shadow-md hover:shadow-lg"
                   }`}
               >
                 <div className="flex items-start gap-4">
-                  <div className={`h-11 w-11 rounded-xl flex items-center justify-center flex-shrink-0 ${getIconStyle(notif.type)}`}>
+                  <div
+                    className={`h-11 w-11 rounded-xl flex items-center justify-center flex-shrink-0 ${getIconStyle(notif.type)}`}
+                  >
                     {getIcon(notif.type)}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex justify-between items-start gap-2">
-                      <h3 className={`text-gray-800 dark:text-gray-100 ${!notif.isRead ? "font-bold" : "font-semibold"}`}>
+                      <h3
+                        className={`text-gray-800 dark:text-gray-100 ${!notif.isRead ? "font-bold" : "font-semibold"}`}
+                      >
                         {notif.title}
                       </h3>
-                      <span className="text-xs text-gray-400 whitespace-nowrap">{notif.time}</span>
+                      <span className="text-xs text-gray-400 whitespace-nowrap">
+                        {notif.time}
+                      </span>
                     </div>
-                    <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">{notif.message}</p>
- 
-{notif.type === "INVITE" && notif.organization && (
-  <div className="mt-3 flex items-center justify-between rounded-xl bg-gray-50 dark:bg-gray-800 px-4 py-3">
+                    <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">
+                      {notif.message}
+                    </p>
 
-    <div>
-      <p className="text-xs text-gray-500 dark:text-gray-400">
-        Davet edildiğin ekip
-      </p>
+                    {notif.type === "INVITE" && notif.organization && (
+                      <div className="mt-3 flex items-center justify-between rounded-xl bg-gray-50 dark:bg-gray-800 px-4 py-3">
+                        <div>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">
+                            Davet edildiğin ekip
+                          </p>
+                          <p className="font-semibold text-gray-900 dark:text-white">
+                            {notif.organization.name}
+                          </p>
+                        </div>
 
-      <p className="font-semibold text-gray-900 dark:text-white">
-        {notif.organization.name}
-      </p>
-    </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              respondInvite(notif.id, "ACCEPT");
+                            }}
+                            className="h-9 w-9 rounded-full bg-green-100 text-green-600 hover:bg-green-200 transition flex items-center justify-center"
+                          >
+                            ✓
+                          </button>
 
-    <div className="flex items-center gap-2">
-
-      <button
-        onClick={(e) => {
-          e.stopPropagation();
-          respondInvite(notif.id, "ACCEPT");
-        }}
-        className="h-9 w-9 rounded-full bg-green-100 text-green-600 hover:bg-green-200 transition flex items-center justify-center"
-      >
-        ✓
-      </button>
-
-      <button
-        onClick={(e) => {
-          e.stopPropagation();
-          respondInvite(notif.id, "REJECT");
-        }}
-        className="h-9 w-9 rounded-full bg-gray-200 text-gray-600 hover:bg-gray-300 transition flex items-center justify-center"
-      >
-        ✕
-      </button>
-
-    </div>
-
-  </div>
-)}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              respondInvite(notif.id, "REJECT");
+                            }}
+                            className="h-9 w-9 rounded-full bg-gray-200 text-gray-600 hover:bg-gray-300 transition flex items-center justify-center"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
-                    {!notif.isRead && <span className="w-2 h-2 rounded-full bg-blue-500 mt-1" />}
+                    {!notif.isRead && (
+                      <span className="w-2 h-2 rounded-full bg-blue-500 mt-1" />
+                    )}
                     <button
-                      onClick={(e) => { e.stopPropagation(); deleteNotification(notif.id); }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        deleteNotification(notif.id);
+                      }}
                       className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-900 text-gray-400 hover:text-red-500"
                       title="Sil"
                     >

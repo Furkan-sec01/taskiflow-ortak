@@ -4,7 +4,10 @@ function errorHandler(err, req, res, next) {
 
   console.error(`[HATA] ${req.method} ${req.originalUrl} ->`, err);
 
-  if (err.name === "MulterError" || err.message?.includes("JPEG, PNG veya WEBP")) {
+  // Dosya boyutu/alan adı gibi multer'ın kendi hataları. Tür reddi artık
+  // statusCode taşıyor ve aşağıdaki genel dala düşüyor; mesaj metnine göre
+  // eşleştirme yapmıyoruz (yeni bir yükleyici eklendiğinde unutuluyordu).
+  if (err.name === "MulterError") {
     return res.status(400).json({ error: err.message || "Dosya yüklenirken bir hata oluştu." });
   }
 

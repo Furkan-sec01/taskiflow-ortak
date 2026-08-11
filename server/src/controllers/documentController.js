@@ -14,6 +14,13 @@ async function checkMembership(userId, orgId) {
 
 async function canAccessDocument(userId, doc) {
   if (!doc) return false;
+
+  // Göreve ekli belgeler bu uçlar üzerinden yönetilmez; erişimi görevin
+  // projesi belirler ve işlemler /api/tasks/:taskId/attachments altında
+  // yapılır. Burada kapatmazsak, ekibin görevine yüklenen bir dosya
+  // "kişisel belge" gibi davranır (orgId null olduğu için).
+  if (doc.taskId) return false;
+
   if (doc.orgId) {
     return checkMembership(userId, doc.orgId);
   }
@@ -30,7 +37,8 @@ exports.getDocuments = async (req, res) => {
     }
 
     const documents = await prisma.document.findMany({
-      where: { orgId },
+      // taskId: null -> görev ekleri ekip belgeleri sekmesinde listelenmez.
+      where: { orgId, taskId: null },
       orderBy: { updatedAt: "desc" },
     });
 
@@ -79,7 +87,9 @@ exports.getPersonalDocuments = async (req, res) => {
 
   try {
     const documents = await prisma.document.findMany({
-      where: { uploaderId: userId, orgId: null },
+      // taskId: null şart; aksi hâlde kullanıcının bir göreve yüklediği her
+      // dosya "kişisel belgelerim" listesinde de görünürdü.
+      where: { uploaderId: userId, orgId: null, taskId: null },
       orderBy: { updatedAt: "desc" },
     });
 

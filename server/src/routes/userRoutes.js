@@ -11,5 +11,7 @@ router.get("/me", userController.getMe);
 router.put("/profile", userController.updateProfile);
 router.post("/avatar", uploadAvatar.single("avatar"), userController.uploadAvatar);
 router.put("/change-password", userController.changePassword);
+// Geri alınamaz. Gövdede mevcut şifre beklenir (bkz. deleteAccount).
+router.delete("/me", userController.deleteAccount);
 
 module.exports = router;

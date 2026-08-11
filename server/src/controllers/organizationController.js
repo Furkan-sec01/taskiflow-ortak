@@ -1,5 +1,5 @@
 const {PrismaClient} = require("@prisma/client");
-const { join } = require("@prisma/client/runtime/library");
+const { collectDocumentPaths, removeFiles } = require("../utils/fileCleanup");
 const prisma = new PrismaClient();
 
 
@@ -69,11 +69,23 @@ exports.deleteOrg = async (req, res) => {
             return;
         }
 
+        // Ekip silinince hem ekip belgeleri hem de ekibin projelerindeki
+        // görev ekleri cascade ile gidiyor. İki grubu da diskten temizlemek
+        // için yolları önce topluyoruz.
+        const filePaths = await collectDocumentPaths(prisma, {
+            OR: [
+                { orgId },
+                { task: { project: { orgId } } }
+            ]
+        });
+
         await prisma.organization.delete({
             where: {
                 id: orgId
             }
         });
+
+        removeFiles(filePaths);
 
         res.status(200).json({
             message: "Ekip başarıyla silindi."
@@ -191,7 +203,16 @@ exports.getMembers = async (req , res) => {
         const members = await prisma.user_Organization.findMany({
             where: {organizationId: orgId},
             include:{
-                user: true
+                // include: { user: true } şifre dahil tüm kullanıcı alanlarını
+                // çekiyordu; sadece ekranda kullanılanları seçiyoruz.
+                user: {
+                    select: {
+                        id: true,
+                        name: true,
+                        email: true,
+                        status: true
+                    }
+                }
             }
         });
 
@@ -201,6 +222,9 @@ exports.getMembers = async (req , res) => {
             id: m.user.id,
             name: m.user.name,
             email: m.user.email,
+            // status eksikti; istemci "active" bekleyip undefined bulduğu için
+            // bütün üyeleri "Pasif" gösteriyordu.
+            status: m.user.status,
             role: m.role,
             joinedAt: m.joinedAt
         }));
@@ -302,6 +326,133 @@ exports.leaveOrganization = async(req, res) => {
         });
     }
 }
+
+/**
+ * Ekip sahipliğini başka bir üyeye devreder.
+ *
+ * NEDEN GEREKLİ: Sahiplik iki ayrı yerde tutuluyor - Organization.ownerId ve
+ * User_Organization.role. İkisi birden güncellenmezse ekip tutarsız duruma
+ * düşer. Ayrıca sahiplik devri olmadan ekip sahibi:
+ *   - ekipten ayrılamıyor (leaveOrganization OWNER'ı reddediyor),
+ *   - hesabını silemiyor (deleteAccount 409 dönüyor),
+ * yani tek çıkışı ekibi tamamen silmek oluyordu.
+ *
+ * PROJELER: Varsayılan olarak devreden kişinin BU EKİPTEKİ projelerinin
+ * sahipliği de yeni sahibe geçer. Aksi hâlde kişi ekibi devretse bile
+ * projelere bağlı kaldığı için hâlâ ayrılamaz/hesabını silemez.
+ * İstenmiyorsa gövdede transferProjects: false gönderilebilir.
+ */
+exports.transferOwnership = async (req, res) => {
+    const { orgId } = req.params;
+    const { newOwnerId, transferProjects = true } = req.body;
+    const currentUserId = req.user.id || req.user.userId;
+
+    if (!newOwnerId) {
+        return res.status(400).json({ error: "Yeni sahip seçilmedi." });
+    }
+
+    try {
+        const organization = await prisma.organization.findUnique({
+            where: { id: orgId }
+        });
+
+        if (!organization) {
+            return res.status(404).json({ error: "Ekip bulunamadı." });
+        }
+
+        // Yetki kontrolü, gövdedeki verinin doğrulanmasından ÖNCE gelir.
+        // Aksi hâlde ekiple ilgisi olmayan biri kendini newOwnerId olarak
+        // gönderdiğinde 403 yerine 400 alıyor ve isteğinin neden reddedildiği
+        // konusunda yanıltıcı bilgi ediniyordu.
+        if (organization.ownerId !== currentUserId) {
+            return res.status(403).json({ error: "Sadece ekip sahibi sahipliği devredebilir." });
+        }
+
+        if (newOwnerId === currentUserId) {
+            return res.status(400).json({ error: "Sahipliği kendinize devredemezsiniz." });
+        }
+
+        // Yeni sahip zaten ekibin üyesi olmalı. Aksi hâlde ekibe hiç ilgisi
+        // olmayan birine sahiplik verilebilirdi.
+        const newOwnerMembership = await prisma.user_Organization.findUnique({
+            where: {
+                userId_organizationId: {
+                    userId: newOwnerId,
+                    organizationId: orgId
+                }
+            },
+            include: {
+                user: { select: { id: true, name: true, email: true } }
+            }
+        });
+
+        if (!newOwnerMembership) {
+            return res.status(400).json({ error: "Yeni sahip bu ekibin üyesi olmalı." });
+        }
+
+        const currentUser = await prisma.user.findUnique({
+            where: { id: currentUserId },
+            select: { name: true }
+        });
+
+        let movedProjectCount = 0;
+
+        await prisma.$transaction(async (tx) => {
+            await tx.organization.update({
+                where: { id: orgId },
+                data: { ownerId: newOwnerId }
+            });
+
+            await tx.user_Organization.update({
+                where: {
+                    userId_organizationId: {
+                        userId: newOwnerId,
+                        organizationId: orgId
+                    }
+                },
+                data: { role: "OWNER" }
+            });
+
+            // Eski sahip ekipte kalır, sadece rolü düşer.
+            await tx.user_Organization.update({
+                where: {
+                    userId_organizationId: {
+                        userId: currentUserId,
+                        organizationId: orgId
+                    }
+                },
+                data: { role: "MEMBER" }
+            });
+
+            if (transferProjects) {
+                const result = await tx.project.updateMany({
+                    where: { orgId: orgId, ownerId: currentUserId },
+                    data: { ownerId: newOwnerId }
+                });
+                movedProjectCount = result.count;
+            }
+
+            await tx.notification.create({
+                data: {
+                    userId: newOwnerId,
+                    organizationId: orgId,
+                    title: "Ekip Sahipliği Devredildi",
+                    message: `${currentUser?.name || "Bir kullanıcı"} size "${organization.name}" ekibinin sahipliğini devretti.`,
+                    type: "ORGANIZATION"
+                }
+            });
+        });
+
+        return res.json({
+            message: `Sahiplik ${newOwnerMembership.user.name || newOwnerMembership.user.email} kullanıcısına devredildi.`,
+            organization: { id: orgId, name: organization.name, ownerId: newOwnerId },
+            transferredProjectCount: movedProjectCount
+        });
+    } catch (error) {
+        console.error("transferOwnership Hatası:", error);
+        return res.status(500).json({ error: "Sahiplik devredilirken bir hata oluştu." });
+    }
+};
 
 exports.getUserOrganizations = async (req, res) => {
   const userId = req.user.id || req.user.userId;

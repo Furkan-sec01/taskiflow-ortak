@@ -1,8 +1,7 @@
 import { Link } from "react-router-dom";
 import { useTheme } from "../context/ThemeContext";
-import { 
-  LayoutDashboard, ArrowRight, CheckCircle, Play, 
-  Facebook, Twitter, Instagram, Linkedin 
+import {
+  LayoutDashboard, ArrowRight, CheckCircle, Play
 } from "lucide-react";
 
 import Logo from "../components/Logo";

@@ -1,8 +1,7 @@
 import { Link } from "react-router-dom";
 import { useTheme } from "../context/ThemeContext";
-import { 
-  Code, Megaphone, Briefcase, 
-  Facebook, Twitter, Instagram, Linkedin 
+import {
+  Code, Megaphone, Briefcase
 } from "lucide-react";
 import Logo from "../components/Logo";
 

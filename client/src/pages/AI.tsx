@@ -120,6 +120,34 @@ const callBackend = async (message: string, history: Message[] = []): Promise<st
     }
   };
 
+  // Bu fonksiyon hiç tanımlanmamıştı: analiz kartlarına tıklamak
+  // "runAnalysis is not defined" ile patlıyor, ayrıca setAnalyses hiç
+  // çağrılmadığı için kartlar hiçbir zaman açılmıyordu.
+  // NOT: /api/ai/chat ucu şu an sunucuda bağlı değil, yani analiz yine
+  // çalışmayacak - ama artık çökmek yerine kart içinde hata mesajı gösterir.
+  const runAnalysis = async (card: (typeof ANALYSIS_CARDS)[number]) => {
+    setExpandedCard(card.id);
+    setAnalyses(prev => [
+      ...prev.filter(a => a.id !== card.id),
+      { id: card.id, content: "", loading: true },
+    ]);
+
+    try {
+      const reply = await callBackend(card.prompt);
+      setAnalyses(prev =>
+        prev.map(a => (a.id === card.id ? { ...a, content: reply, loading: false } : a)),
+      );
+    } catch (err: any) {
+      setAnalyses(prev =>
+        prev.map(a =>
+          a.id === card.id
+            ? { ...a, content: `Analiz yapılamadı: ${err.message}`, loading: false }
+            : a,
+        ),
+      );
+    }
+  };
+
   const getAnalysis = (id: string) => analyses.find(a => a.id === id);
 
   return (

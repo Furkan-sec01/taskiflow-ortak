@@ -1,5 +1,7 @@
 import { useState, useEffect } from "react";
 import { Users, Mail, Shield, Crown, Search, Moon, Sun } from "lucide-react";
+import { API_BASE } from "../config/api";
+import { useTheme } from "../context/ThemeContext";
 
 interface Member {
   id: string;
@@ -14,50 +16,65 @@ const Members = () => {
   const [members, setMembers] = useState<Member[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
-  const [dark, setDark] = useState(() =>
-    document.documentElement.classList.contains("dark")
-  );
 
-  const toggleDark = () => {
-    const isDark = document.documentElement.classList.contains("dark");
-    if (isDark) {
-      document.documentElement.classList.remove("dark");
-      localStorage.setItem("theme", "light");
-    } else {
-      document.documentElement.classList.add("dark");
-      localStorage.setItem("theme", "dark");
-    }
-    setDark(!isDark);
-  };
+  // Bu sayfa kendi karanlık mod anahtarını ("theme") tutuyor ve <html>
+  // sınıfını doğrudan değiştiriyordu; uygulamanın geri kalanı ise
+  // ThemeContext'i ("darkMode") kullanıyor. İki sistem birbirini eziyor,
+  // buradan yapılan seçim sayfa yenilenince kayboluyordu. Tek kaynağa alındı.
+  const { darkMode, setDarkMode } = useTheme();
 
   useEffect(() => {
     const token = localStorage.getItem("token");
-    const storedUser = localStorage.getItem("user");
-    if (!storedUser) return;
+    if (!token) {
+      setLoading(false);
+      return;
+    }
 
-    try {
-      const user = JSON.parse(storedUser);
-      const orgId = user.organizationId || localStorage.getItem("activeOrgId");
-
-      if (orgId) {
-        fetch(`http://localhost:5000/api/organizations/${orgId}/members`, {
+    // Eskiden orgId, localStorage'daki user nesnesinin "organizationId"
+    // alanından okunuyordu - ama sunucunun döndürdüğü user'da böyle bir alan
+    // yok. Yedek olan activeOrgId de yalnızca Takımlar sayfasında bir ekibe
+    // tıklanınca yazılıyor. Sonuç: yeni giriş yapan herkes boş liste
+    // görüyordu. Artık kenar çubuğuyla aynı kaynaktan (/api/users/me)
+    // çözüyoruz, activeOrgId sadece tercih olarak kullanılıyor.
+    const loadMembers = async () => {
+      try {
+        const meRes = await fetch(`${API_BASE}/api/users/me`, {
           headers: { Authorization: `Bearer ${token}` }
-        })
-          .then(res => res.json())
-          .then(data => {
-            setMembers(Array.isArray(data) ? data : data.members || []);
-            setLoading(false);
-          })
-          .catch(err => {
-            console.error(err);
-            setLoading(false);
-          });
-      } else {
+        });
+
+        if (!meRes.ok) throw new Error("Kullanıcı bilgisi alınamadı.");
+
+        const me = await meRes.json();
+        const orgs: { id: string }[] = me.myOrganizations || [];
+
+        const preferredOrgId = localStorage.getItem("activeOrgId");
+        const orgId =
+          (preferredOrgId && orgs.some(o => o.id === preferredOrgId)
+            ? preferredOrgId
+            : orgs[0]?.id) || null;
+
+        if (!orgId) {
+          setMembers([]);
+          return;
+        }
+
+        const res = await fetch(`${API_BASE}/api/organizations/${orgId}/members`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+
+        if (!res.ok) throw new Error("Üye listesi alınamadı.");
+
+        const data = await res.json();
+        setMembers(Array.isArray(data) ? data : data.members || []);
+      } catch (err) {
+        console.error("Üyeler yüklenemedi:", err);
+        setMembers([]);
+      } finally {
         setLoading(false);
       }
-    } catch {
-      setLoading(false);
-    }
+    };
+
+    loadMembers();
   }, []);
 
   const getRoleIcon = (role: string) => {
@@ -102,11 +119,11 @@ const Members = () => {
 
           {/* Dark mode toggle */}
           <button
-            onClick={toggleDark}
+            onClick={() => setDarkMode(!darkMode)}
             className="w-10 h-10 rounded-xl flex items-center justify-center transition-colors bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-yellow-400 hover:bg-gray-100 dark:hover:bg-gray-700"
-            title={dark ? "Açık moda geç" : "Koyu moda geç"}
+            title={darkMode ? "Açık moda geç" : "Koyu moda geç"}
           >
-            {dark ? <Sun size={18} /> : <Moon size={18} />}
+            {darkMode ? <Sun size={18} /> : <Moon size={18} />}
           </button>
         </div>
 

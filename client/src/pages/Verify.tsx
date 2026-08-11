@@ -3,6 +3,7 @@ import { useSearchParams, useNavigate } from "react-router-dom";
 import { useTheme } from "../context/ThemeContext";
 import { CheckCircle, XCircle, Loader } from "lucide-react";
 import Logo from "../components/Logo";
+import { API_BASE } from "../config/api";
 
 const Verify = () => {
   const { darkMode } = useTheme();
@@ -22,11 +23,7 @@ const Verify = () => {
     }
 
     try {
-      // Backend URL'lerini dene (localhost ve 127.0.0.1)
-      const backendUrls = [
-        "http://localhost:5000/api/verify",
-        "http://127.0.0.1:5000/api/verify"
-      ];
+      const backendUrls = [`${API_BASE}/api/verify`];
 
       let lastError: any = null;
       let success = false;
@@ -88,7 +85,7 @@ const Verify = () => {
       if (error.name === 'AbortError' || error.name === 'TimeoutError') {
         setMessage("İstek zaman aşımına uğradı. Backend sunucusunun çalıştığından emin olun.");
       } else if (error.message?.includes('Failed to fetch') || error.message?.includes('NetworkError')) {
-        setMessage("Sunucuya bağlanılamadı. Lütfen backend sunucusunun çalıştığından emin olun (http://localhost:5000).");
+        setMessage(`Sunucuya bağlanılamadı. Lütfen backend sunucusunun çalıştığından emin olun (${API_BASE}).`);
       } else if (error.message) {
         setMessage(`Hata: ${error.message}`);
       } else {
@@ -213,7 +210,7 @@ const Verify = () => {
                   <ol className={`list-decimal list-inside space-y-1 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
                     <li>Backend sunucusunun çalıştığından emin olun</li>
                     <li>Terminal'de <code className="bg-gray-800 text-green-400 px-1 rounded">cd server && npm start</code> komutunu çalıştırın</li>
-                    <li>Sunucunun <code className="bg-gray-800 text-green-400 px-1 rounded">http://localhost:5000</code> adresinde çalıştığını kontrol edin</li>
+                    <li>Sunucunun <code className="bg-gray-800 text-green-400 px-1 rounded">{API_BASE}</code> adresinde çalıştığını kontrol edin</li>
                   </ol>
                 </div>
               )}

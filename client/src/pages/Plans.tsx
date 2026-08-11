@@ -1,25 +1,46 @@
-import { Link } from "react-router-dom";
+import toast from "react-hot-toast";
+import { useEffect } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { useTheme } from "../context/ThemeContext";
-import { 
-  Check, Star, Shield, Zap, 
-  Facebook, Twitter, Instagram, Linkedin 
+import {
+  Check, Star, Shield, Zap
 } from "lucide-react";
 import Logo from "../components/Logo";
+import { PLAN_LABELS, PLAN_PRICES, type PlanCode } from "../config/plans";
 
 const Plans = () => {
   const { darkMode } = useTheme();
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Ödeme yarıda kalıp buraya geri yönlendirildiyse sebebini göster.
+  // Mesajı sunucu üretir (server/src/config/iyzicoErrors.js): kart/banka
+  // kaynaklı hatalarda gerçek sebep, bizim taraf hatalarında genel mesaj gelir.
+  useEffect(() => {
+    if (!searchParams.get("paymentError")) return;
+
+    toast.error(
+      searchParams.get("paymentMessage") ||
+        "Ödeme tamamlanamadı. Lütfen tekrar deneyin."
+    );
+
+    // Sayfa yenilendiğinde aynı uyarı tekrar çıkmasın.
+    searchParams.delete("paymentError");
+    searchParams.delete("paymentMessage");
+    setSearchParams(searchParams, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   // Ödeme Başlatma Fonksiyonu
-  const handleCheckout = (planName: string, price: number) => {
-    // Ödeme sayfasına yönlendir
-    window.location.href = `/payment?plan=${encodeURIComponent(planName)}&price=${price}`;
+  const handleCheckout = (code: PlanCode) => {
+    // Ödeme sayfasına plan KODU ile yönlendir; tutarı sunucu belirler.
+    window.location.href = `/payment?plan=${code}`;
   };
 
   const plans = [
     {
-      name: "Başlangıç",
-      price: 0,
-      displayPrice: "₺0",
+      code: "FREE" as PlanCode,
+      name: PLAN_LABELS.FREE,
+      price: PLAN_PRICES.FREE,
+      displayPrice: `₺${PLAN_PRICES.FREE}`,
       period: "/ay",
       desc: "Bireysel kullanım ve küçük projeler için ideal.",
       features: ["Sınırsız Görev", "2 Proje", "50 MB Depolama", "Temel Destek"],
@@ -29,9 +50,10 @@ const Plans = () => {
       btnColor: "bg-gray-100 text-gray-700 hover:bg-gray-200"
     },
     {
-      name: "Profesyonel",
-      price: 99,
-      displayPrice: "₺99",
+      code: "PRO" as PlanCode,
+      name: PLAN_LABELS.PRO,
+      price: PLAN_PRICES.PRO,
+      displayPrice: `₺${PLAN_PRICES.PRO}`,
       period: "/ay",
       desc: "Büyüyen ekipler ve ciddi işler için güç.",
       features: ["Sınırsız Proje", "Sınırsız Ekip Üyesi", "10 GB Depolama", "Gelişmiş Raporlar", "Öncelikli Destek"],
@@ -41,8 +63,9 @@ const Plans = () => {
       btnColor: "bg-blue-600 text-white hover:bg-blue-700"
     },
     {
-      name: "Şirketler",
-      price: 0, // Özel fiyatlandırma için 0 kullanıyoruz
+      code: "BUSINESS" as PlanCode,
+      name: PLAN_LABELS.BUSINESS,
+      price: 0, // Özel fiyatlandırma: satın alma değil /contact akışı
       displayPrice: "Özel",
       period: "",
       desc: "Büyük organizasyonlar için tam kontrol.",
@@ -123,7 +146,7 @@ const Plans = () => {
               </Link>
             ) : plan.price > 0 ? (
               <button 
-                onClick={() => handleCheckout(plan.name, plan.price)}
+                onClick={() => handleCheckout(plan.code)}
                 className={`w-full py-3.5 rounded-xl font-bold text-center transition-colors shadow-sm hover:scale-[1.02] ${plan.btnColor}`}
               >
                 {plan.buttonText}

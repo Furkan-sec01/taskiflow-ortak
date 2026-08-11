@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import {
   BarChart2, ChevronRight, Building2,
 } from "lucide-react";
+import { API_BASE } from "../config/api";
 
 
 interface Project {
@@ -14,7 +15,6 @@ interface Project {
   icon: React.ReactNode;
 }
 
-const API_BASE = "http://localhost:5000";
 
 const DYNAMIC_COLORS = ["#6366f1", "#ec4899", "#14b8a6", "#f97316", "#84cc16", "#a855f7"];
 

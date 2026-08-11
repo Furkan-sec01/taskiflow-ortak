@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { Activity, TrendingUp, Users, Award, Loader2, Layout, Zap } from "lucide-react";
+import { Activity, TrendingUp, Award, Loader2, Layout, Zap } from "lucide-react";
+import { API_BASE } from "../config/api";
 
 interface Member {
   id: string;
@@ -25,7 +26,7 @@ const Pulse: React.FC = () => {
     const fetchProjects = async () => {
       try {
         const token = localStorage.getItem("token");
-        const response = await fetch("http://localhost:5000/api/project/my-projects", {
+        const response = await fetch(`${API_BASE}/api/project/my-projects`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         const data = await response.json();

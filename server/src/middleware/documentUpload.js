@@ -33,7 +33,12 @@ const allowedMimeTypes = [
 
 const fileFilter = (req, file, cb) => {
   if (!allowedMimeTypes.includes(file.mimetype)) {
-    return cb(new Error("Desteklenmeyen dosya türü."));
+    // statusCode olmadan errorHandler bunu bilinmeyen bir hata sayıp 500 ve
+    // "Sunucu hatası oluştu" dönüyordu; oysa bu kullanıcının düzeltebileceği
+    // bir durum ve sebebini görmesi gerekiyor.
+    const error = new Error("Desteklenmeyen dosya türü.");
+    error.statusCode = 400;
+    return cb(error);
   }
   cb(null, true);
 };

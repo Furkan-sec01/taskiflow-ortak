@@ -2,8 +2,8 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTheme } from "../context/ThemeContext";
 import { Plus, X, Flag, CheckCircle, Clock, Trash2 } from "lucide-react";
+import { API_BASE } from "../config/api";
 
-const API_BASE = "http://localhost:5000";
 
 // Görev Tipi Tanımı (backend: PersonalTask)
 interface Task {

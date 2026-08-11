@@ -2,19 +2,72 @@ import toast from "react-hot-toast";
 import { useState, useEffect } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import {
-  Inbox, Circle, ChevronRight, Search, PenLine, LayoutGrid, Users,
-  Eye, MoreHorizontal, Plus, HelpCircle, Layers, Tag, FileText,
-  Zap, Bot, MessageSquare, Shield, Link, CreditCard, Download,
-  Activity, Cpu, GitBranch, ArrowLeft, LogOut,
-  CheckSquare, Map, BarChart2, Bell, Settings, Trash2, X,
+  Inbox,
+  Circle,
+  ChevronRight,
+  Search,
+  PenLine,
+  LayoutGrid,
+  Users,
+  Eye,
+  MoreHorizontal,
+  Plus,
+  HelpCircle,
+  Layers,
+  Tag,
+  FileText,
+  Zap,
+  Bot,
+  MessageSquare,
+  Shield,
+  Link,
+  CreditCard,
+  Download,
+  Activity,
+  Cpu,
+  GitBranch,
+  ArrowLeft,
+  LogOut,
+  CheckSquare,
+  Map,
+  BarChart2,
+  Bell,
+  Settings,
+  Trash2,
+  X,
 } from "lucide-react";
+import { API_BASE } from "../config/api";
 
 const iconMap: Record<string, React.ElementType> = {
-  Inbox, Circle, ChevronRight, Search, Pen: PenLine, Grid: LayoutGrid,
-  Users, Eye, More: MoreHorizontal, Plus, Help: HelpCircle, Layers,
-  Tag, File: FileText, Zap, Bot, Msg: MessageSquare, Shield, Link,
-  Card: CreditCard, Download, Activity, Cpu, Git: GitBranch,
-  Check: CheckSquare, Map, BarChart: BarChart2, Bell, Settings,
+  Inbox,
+  Circle,
+  ChevronRight,
+  Search,
+  Pen: PenLine,
+  Grid: LayoutGrid,
+  Users,
+  Eye,
+  More: MoreHorizontal,
+  Plus,
+  Help: HelpCircle,
+  Layers,
+  Tag,
+  File: FileText,
+  Zap,
+  Bot,
+  Msg: MessageSquare,
+  Shield,
+  Link,
+  Card: CreditCard,
+  Download,
+  Activity,
+  Cpu,
+  Git: GitBranch,
+  Check: CheckSquare,
+  Map,
+  BarChart: BarChart2,
+  Bell,
+  Settings,
 };
 
 interface GroupItem {
@@ -35,39 +88,47 @@ interface Team {
 
 const workspaceGroups: Group[] = [
   {
-    label: "Workspace", key: "workspace",
+    label: "Workspace",
+    key: "workspace",
     items: [
-      { icon: "Grid",     label: "Genel Bakış",  to: "/dashboard" },
-      { icon: "Grid",     label: "Projeler",      to: "/test-projelerim" },
-      { icon: "Users",    label: "Teams",         to: "/team" },
-      { icon: "Users",    label: "Members",       to: "/members" },
-      { icon: "BarChart", label: "Raporlar",      to: "/reports" },
-      { icon: "Tag",      label: "Ayarlar",       to: "/settings" },
+      { icon: "Grid", label: "Genel Bakış", to: "/dashboard" },
+      { icon: "Grid", label: "Projeler", to: "/test-projelerim" },
+      { icon: "Users", label: "Teams", to: "/team" },
+      { icon: "Users", label: "Members", to: "/members" },
+      { icon: "BarChart", label: "Raporlar", to: "/reports" },
+      { icon: "Tag", label: "Ayarlar", to: "/settings" },
     ],
   },
 ];
 
 const tryGroup: Group = {
-  label: "Try", key: "try",
+  label: "Try",
+  key: "try",
   items: [
     { icon: "Activity", label: "Pulse", to: "/pulse" },
-    { icon: "Cpu",      label: "AI",    to: "/ai" },
+    { icon: "Cpu", label: "AI", to: "/ai" },
   ],
 };
 
 const settingsGroups: Group[] = [
   {
-    label: "", key: "account",
+    label: "",
+    key: "account",
     items: [
-     // { icon: "Tag",    label: "Preferences",        to: "/settings/preferences" },
-     { icon: "Users",  label: "Profile",             to: "/settings/profile" },
+      // { icon: "Tag",    label: "Preferences",        to: "/settings/preferences" },
+      { icon: "Users", label: "Profile", to: "/settings/profile" },
       //{ icon: "Inbox",  label: "Notifications",       to: "/settings/notifications", badge: 3 },
-      { icon: "Shield", label: "Security & access",   to: "/settings/security" },
-      { icon: "Link",   label: "Connected accounts",  to: "/settings/connections" },
+      { icon: "Shield", label: "Security & access", to: "/settings/security" },
+      {
+        icon: "Link",
+        label: "Connected accounts",
+        to: "/settings/connections",
+      },
     ],
   },
   {
-    label: "Issues", key: "issues_s",
+    label: "Issues",
+    key: "issues_s",
     items: [
       //{ icon: "Tag",  label: "Labels",    to: "/settings/labels" },
       { icon: "File", label: "Templates", to: "/settings/templates" },
@@ -75,10 +136,11 @@ const settingsGroups: Group[] = [
     ],
   },
   {
-    label: "Features", key: "features",
+    label: "Features",
+    key: "features",
     items: [
       //{ icon: "Layers", label: "Initiatives",      to: "/settings/initiatives" },
-      { icon: "File",   label: "Documents",         to: "/settings/documents" },
+      { icon: "File", label: "Documents", to: "/settings/documents" },
       //{ icon: "Msg",    label: "Customer requests", to: "/settings/requests" },
       //{ icon: "Zap",    label: "Pulse",             to: "/settings/pulse" },
       //{ icon: "Cpu",    label: "AI",                to: "/settings/ai" },
@@ -86,7 +148,8 @@ const settingsGroups: Group[] = [
     ],
   },
   {
-    label: "Administration", key: "admin",
+    label: "Administration",
+    key: "admin",
     items: [
       //{ icon: "Grid",     label: "Workspace",       to: "/settings/workspace" },
       //{ icon: "Users",    label: "Teams",           to: "/settings/teams" },
@@ -94,7 +157,7 @@ const settingsGroups: Group[] = [
       //{ icon: "Shield",   label: "Security",        to: "/settings/security-admin" },
       // { icon: "Git",      label: "API",             to: "/settings/api" },
       //{ icon: "Link",     label: "Applications",    to: "/settings/applications" },
-      { icon: "Card",     label: "Billing",         to: "/settings/billing" },
+      { icon: "Card", label: "Billing", to: "/settings/billing" },
       { icon: "Download", label: "Export", to: "/settings/import" },
     ],
   },
@@ -108,7 +171,13 @@ interface NavButtonProps {
   indent?: boolean;
 }
 
-function NavButton({ iconKey, label, badge, to, indent = false }: NavButtonProps) {
+function NavButton({
+  iconKey,
+  label,
+  badge,
+  to,
+  indent = false,
+}: NavButtonProps) {
   const Icon = iconMap[iconKey];
   const baseStyle = `w-full flex items-center gap-2 rounded-md border-none cursor-pointer text-left text-[12.5px] transition-colors duration-100 ${indent ? "pl-5 pr-2 py-1.5" : "px-2 py-1.5"}`;
   if (to) {
@@ -116,9 +185,11 @@ function NavButton({ iconKey, label, badge, to, indent = false }: NavButtonProps
       <NavLink
         to={to}
         className={({ isActive }) =>
-          `${baseStyle} ${isActive
-            ? "bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 font-semibold"
-            : "text-slate-500 dark:text-slate-400 hover:bg-blue-50 dark:hover:bg-slate-700 font-normal"}`
+          `${baseStyle} ${
+            isActive
+              ? "bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 font-semibold"
+              : "text-slate-500 dark:text-slate-400 hover:bg-blue-50 dark:hover:bg-slate-700 font-normal"
+          }`
         }
       >
         <span className="flex items-center opacity-70">
@@ -134,7 +205,9 @@ function NavButton({ iconKey, label, badge, to, indent = false }: NavButtonProps
     );
   }
   return (
-    <button className={`${baseStyle} text-slate-500 dark:text-slate-400 hover:bg-blue-50 dark:hover:bg-slate-700`}>
+    <button
+      className={`${baseStyle} text-slate-500 dark:text-slate-400 hover:bg-blue-50 dark:hover:bg-slate-700`}
+    >
       <span className="flex items-center opacity-70">
         {Icon && <Icon size={15} />}
       </span>
@@ -147,7 +220,9 @@ export default function Sidebar() {
   const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [mode, setMode] = useState<"main" | "settings">("main");
-  const [user, setUser] = useState<{ name: string; email: string } | null>(null);
+  const [user, setUser] = useState<{ name: string; email: string } | null>(
+    null,
+  );
   const [teams, setTeams] = useState<Team[]>([]);
   const [addingTeam, setAddingTeam] = useState(false);
   const [newTeamName, setNewTeamName] = useState("");
@@ -156,8 +231,11 @@ export default function Sidebar() {
   useEffect(() => {
     const storedUser = localStorage.getItem("user");
     if (storedUser) {
-      try { setUser(JSON.parse(storedUser)); }
-      catch (error) { console.error("Kullanıcı verisi ayrıştırılamadı:", error); }
+      try {
+        setUser(JSON.parse(storedUser));
+      } catch (error) {
+        console.error("Kullanıcı verisi ayrıştırılamadı:", error);
+      }
     }
   }, []);
 
@@ -166,14 +244,21 @@ export default function Sidebar() {
       const token = localStorage.getItem("token");
       if (!token) return;
       try {
-        const res = await fetch("http://localhost:5000/api/users/me", {
-          headers: { "Authorization": `Bearer ${token}` }
+        const res = await fetch(`${API_BASE}/api/users/me`, {
+          headers: { Authorization: `Bearer ${token}` },
         });
         const data = await res.json();
         if (res.ok && data.myOrganizations) {
-          setTeams(data.myOrganizations.map((org: any) => ({ id: org.id, name: org.name })));
+          setTeams(
+            data.myOrganizations.map((org: any) => ({
+              id: org.id,
+              name: org.name,
+            })),
+          );
         }
-      } catch (err) { console.error("Takımlar yüklenemedi:", err); }
+      } catch (err) {
+        console.error("Takımlar yüklenemedi:", err);
+      }
     };
     fetchTeams();
     const handler = () => fetchTeams();
@@ -181,36 +266,35 @@ export default function Sidebar() {
     return () => window.removeEventListener("teams-updated", handler);
   }, []);
 
+  const [unreadCount, setUnreadCount] = useState<number>(0);
 
-const [unreadCount, setUnreadCount] = useState<number>(0);
-
-useEffect(() => {
-  const fetchUnreadCount = async () => {
-    const token = localStorage.getItem("token");
-    if (!token) return;
-    try {
-      const res = await fetch("http://localhost:5000/api/notifications", {
-        headers: { "Authorization": `Bearer ${token}` }
-      });
-      const data = await res.json();
-      if (res.ok && Array.isArray(data)) {
-        // Okunmamış (isRead: false) bildirimlerin sayısını buluyoruz
-        const unread = data.filter((n: any) => !n.isRead).length;
-        setUnreadCount(unread);
+  useEffect(() => {
+    const fetchUnreadCount = async () => {
+      const token = localStorage.getItem("token");
+      if (!token) return;
+      try {
+        const res = await fetch(`${API_BASE}/api/notifications`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = await res.json();
+        if (res.ok && Array.isArray(data)) {
+          // Okunmamış (isRead: false) bildirimlerin sayısını buluyoruz
+          const unread = data.filter((n: any) => !n.isRead).length;
+          setUnreadCount(unread);
+        }
+      } catch (err) {
+        console.error("Bildirim sayısı çekilemedi:", err);
       }
-    } catch (err) {
-      console.error("Bildirim sayısı çekilemedi:", err);
-    }
-  };
+    };
 
-  fetchUnreadCount();
-}, []);
-
+    fetchUnreadCount();
+  }, []);
 
   const getInitials = (name: string) => {
     if (!name) return "??";
     const parts = name.split(" ");
-    if (parts.length > 1) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+    if (parts.length > 1)
+      return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
     return name[0].toUpperCase();
   };
 
@@ -218,7 +302,7 @@ useEffect(() => {
     const token = localStorage.getItem("token");
     try {
       if (token) {
-        await fetch("http://localhost:5000/api/auth/logout", {
+        await fetch(`${API_BASE}/api/auth/logout`, {
           method: "POST",
           headers: { Authorization: `Bearer ${token}` },
         });
@@ -226,13 +310,17 @@ useEffect(() => {
     } catch (err) {
       console.error("Logout isteği başarısız (yine de çıkış yapılıyor):", err);
     } finally {
+      // "user" da silinmeli: eskiden kalınca çıkış yapıldıktan sonra bile
+      // kenar çubuğunda önceki kullanıcının adı ve e-postası görünüyordu.
       localStorage.removeItem("token");
+      localStorage.removeItem("user");
       localStorage.removeItem("activeOrgId");
       navigate("/login");
     }
   };
 
-  const toggle = (key: string) => setCollapsed(p => ({ ...p, [key]: !p[key] }));
+  const toggle = (key: string) =>
+    setCollapsed((p) => ({ ...p, [key]: !p[key] }));
   const groups = mode === "main" ? workspaceGroups : settingsGroups;
 
   const handleAddTeam = async () => {
@@ -242,20 +330,23 @@ useEffect(() => {
     const token = localStorage.getItem("token");
 
     try {
-      const res = await fetch("http://localhost:5000/api/organizations/create", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`
+      const res = await fetch(
+        `${API_BASE}/api/organizations/create`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ name: trimmed }),
         },
-        body: JSON.stringify({ name: trimmed })
-      });
+      );
 
       const data = await res.json();
 
       if (res.ok) {
         const realOrgId = data.organization?.id;
-        setTeams(prev => [...prev, { id: realOrgId, name: trimmed }]);
+        setTeams((prev) => [...prev, { id: realOrgId, name: trimmed }]);
         window.dispatchEvent(new CustomEvent("teams-updated"));
       } else {
         toast.error(data.error || "Ekip oluşturulamadı.");
@@ -266,17 +357,64 @@ useEffect(() => {
 
     setNewTeamName("");
     setAddingTeam(false);
-};
+  };
 
-  const handleDeleteTeam = (e: React.MouseEvent, id: string) => {
+  // Bu fonksiyon eskiden sadece yerel state'ten siliyordu: ekip listeden
+  // kayboluyor, sayfa yenilenince geri geliyordu. Artık gerçekten siliyor.
+  const handleDeleteTeam = async (e: React.MouseEvent, id: string) => {
     e.preventDefault();
     e.stopPropagation();
-    setTeams(prev => prev.filter(t => t.id !== id));
+
+    const team = teams.find((t) => t.id === id);
+
+    if (
+      !window.confirm(
+        `"${team?.name ?? "Bu ekip"}" silinecek. Ekibin tüm projeleri de silinir. Emin misiniz?`,
+      )
+    ) {
+      return;
+    }
+
+    const token = localStorage.getItem("token");
+
+    // İyimser güncelleme: önce listeden çıkar, istek başarısızsa geri koy.
+    setTeams((prev) => prev.filter((t) => t.id !== id));
+
+    try {
+      const res = await fetch(`${API_BASE}/api/organizations/${id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Ekip silinemedi.");
+      }
+
+      // Silinen ekip aktif ekipse referansı da temizle, yoksa Üyeler sayfası
+      // artık var olmayan bir orgId ile istek atmaya devam eder.
+      if (localStorage.getItem("activeOrgId") === id) {
+        localStorage.removeItem("activeOrgId");
+      }
+
+      window.dispatchEvent(new CustomEvent("teams-updated"));
+      toast.success("Ekip silindi.");
+    } catch (error) {
+      setTeams((prev) =>
+        team && !prev.some((t) => t.id === id) ? [...prev, team] : prev,
+      );
+      toast.error(
+        error instanceof Error ? error.message : "Ekip silinirken hata oluştu.",
+      );
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") handleAddTeam();
-    if (e.key === "Escape") { setAddingTeam(false); setNewTeamName(""); }
+    if (e.key === "Escape") {
+      setAddingTeam(false);
+      setNewTeamName("");
+    }
   };
 
   return (
@@ -298,7 +436,10 @@ useEffect(() => {
         </button>
         <div className="flex gap-0.5">
           {[Search, PenLine].map((Icon, i) => (
-            <button key={i} className="bg-transparent border-none cursor-pointer p-1 rounded-md text-slate-500 dark:text-slate-400 hover:bg-blue-100 dark:hover:bg-slate-700 transition-colors flex items-center">
+            <button
+              key={i}
+              className="bg-transparent border-none cursor-pointer p-1 rounded-md text-slate-500 dark:text-slate-400 hover:bg-blue-100 dark:hover:bg-slate-700 transition-colors flex items-center"
+            >
               <Icon size={15} />
             </button>
           ))}
@@ -319,8 +460,14 @@ useEffect(() => {
       {/* Main shortcuts */}
       {mode === "main" && (
         <div className="px-2.5 pt-1.5 pb-0.5">
-          <NavButton iconKey="Inbox" label="Inbox" badge={unreadCount} to="/inbox" />
+          <NavButton
+            iconKey="Inbox"
+            label="Inbox"
+            badge={unreadCount}
+            to="/inbox"
+          />
           <NavButton iconKey="Circle" label="My issues" to="/tasks" />
+          <NavButton iconKey="Card" label="Abonelik Yönet" to="/settings/billing" />
         </div>
       )}
 
@@ -336,7 +483,11 @@ useEffect(() => {
                 <ChevronRight
                   size={12}
                   className="text-slate-400 transition-transform duration-150"
-                  style={{ transform: collapsed[group.key] ? "rotate(0deg)" : "rotate(90deg)" }}
+                  style={{
+                    transform: collapsed[group.key]
+                      ? "rotate(0deg)"
+                      : "rotate(90deg)",
+                  }}
                 />
                 <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide">
                   {group.label}
@@ -345,16 +496,17 @@ useEffect(() => {
             ) : (
               <div className="mt-2" />
             )}
-            {!collapsed[group.key] && group.items.map(({ icon, label, badge, to }) => (
-              <NavButton
-                key={label + group.key}
-                iconKey={icon}
-                label={label}
-                badge={badge}
-                to={to}
-                indent={!!group.label && mode === "main"}
-              />
-            ))}
+            {!collapsed[group.key] &&
+              group.items.map(({ icon, label, badge, to }) => (
+                <NavButton
+                  key={label + group.key}
+                  iconKey={icon}
+                  label={label}
+                  badge={badge}
+                  to={to}
+                  indent={!!group.label && mode === "main"}
+                />
+              ))}
           </div>
         ))}
 
@@ -363,20 +515,27 @@ useEffect(() => {
           <div>
             <div className="flex items-center w-full mt-2">
               <button
-                onClick={() => setTeamsCollapsed(p => !p)}
+                onClick={() => setTeamsCollapsed((p) => !p)}
                 className="flex items-center gap-1 flex-1 px-1.5 py-1 border-none bg-transparent cursor-pointer rounded-md hover:bg-blue-50 dark:hover:bg-slate-700 transition-colors"
               >
                 <ChevronRight
                   size={12}
                   className="text-slate-400 transition-transform duration-150"
-                  style={{ transform: teamsCollapsed ? "rotate(0deg)" : "rotate(90deg)" }}
+                  style={{
+                    transform: teamsCollapsed
+                      ? "rotate(0deg)"
+                      : "rotate(90deg)",
+                  }}
                 />
                 <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide">
                   Your teams
                 </span>
               </button>
               <button
-                onClick={() => { setAddingTeam(true); setTeamsCollapsed(false); }}
+                onClick={() => {
+                  setAddingTeam(true);
+                  setTeamsCollapsed(false);
+                }}
                 className="p-1 mr-1 rounded-md border-none bg-transparent cursor-pointer text-slate-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-slate-700 transition-colors"
                 title="Yeni takım ekle"
               >
@@ -397,7 +556,9 @@ useEffect(() => {
                         }`
                       }
                     >
-                      <span className="flex items-center opacity-70"><Circle size={15} /></span>
+                      <span className="flex items-center opacity-70">
+                        <Circle size={15} />
+                      </span>
                       <span className="flex-1 truncate">{team.name}</span>
                     </NavLink>
                     <button
@@ -421,7 +582,10 @@ useEffect(() => {
                       className="flex-1 text-[12px] bg-white dark:bg-gray-700 border border-blue-300 dark:border-gray-600 rounded-md px-2 py-1 outline-none text-slate-700 dark:text-slate-200 placeholder-slate-400"
                     />
                     <button
-                      onClick={() => { setAddingTeam(false); setNewTeamName(""); }}
+                      onClick={() => {
+                        setAddingTeam(false);
+                        setNewTeamName("");
+                      }}
                       className="p-1 rounded-md border-none bg-transparent cursor-pointer text-slate-400 hover:text-slate-600"
                     >
                       <X size={12} />
@@ -429,7 +593,9 @@ useEffect(() => {
                   </div>
                 )}
                 {teams.length === 0 && !addingTeam && (
-                  <p className="pl-6 py-1 text-[11px] text-slate-400 italic">Henüz takım yok</p>
+                  <p className="pl-6 py-1 text-[11px] text-slate-400 italic">
+                    Henüz takım yok
+                  </p>
                 )}
               </>
             )}
@@ -446,15 +612,26 @@ useEffect(() => {
               <ChevronRight
                 size={12}
                 className="text-slate-400 transition-transform duration-150"
-                style={{ transform: collapsed[tryGroup.key] ? "rotate(0deg)" : "rotate(90deg)" }}
+                style={{
+                  transform: collapsed[tryGroup.key]
+                    ? "rotate(0deg)"
+                    : "rotate(90deg)",
+                }}
               />
               <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide">
                 {tryGroup.label}
               </span>
             </button>
-            {!collapsed[tryGroup.key] && tryGroup.items.map(({ icon, label, to }) => (
-              <NavButton key={label} iconKey={icon} label={label} to={to} indent />
-            ))}
+            {!collapsed[tryGroup.key] &&
+              tryGroup.items.map(({ icon, label, to }) => (
+                <NavButton
+                  key={label}
+                  iconKey={icon}
+                  label={label}
+                  to={to}
+                  indent
+                />
+              ))}
           </div>
         )}
       </div>
@@ -477,7 +654,10 @@ useEffect(() => {
             </p>
           </div>
           <button
-            onClick={(e) => { e.stopPropagation(); handleLogout(); }}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleLogout();
+            }}
             className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-md hover:bg-red-100 dark:hover:bg-red-900 text-slate-400 hover:text-red-500"
             title="Çıkış Yap"
           >

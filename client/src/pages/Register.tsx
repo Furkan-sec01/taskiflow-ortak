@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 // 👇 1. ADIM: Mavi Logoyu buradan çağırıyoruz
 import Logo from "../components/Logo"; 
+import { API_BASE } from "../config/api";
 
 const Register = () => {
   // State Tanımları (Kutucukların içindeki verileri tutmak için)
@@ -17,7 +18,7 @@ const Register = () => {
     e.preventDefault(); // Sayfanın yenilenmesini engelle
 
     try {
-      const res = await fetch("http://localhost:5000/api/auth/register", {
+      const res = await fetch(`${API_BASE}/api/auth/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name, email, password }),

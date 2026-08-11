@@ -2,14 +2,13 @@ import toast from "react-hot-toast";
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTheme } from "../context/ThemeContext";
-import { 
-  Users, 
-  Plus, 
-  Trash2,
+import {
+  Plus,
   ArrowRightCircle,
   X
 } from "lucide-react";
 import NotificationDropdown from "../components/NotificationDropdown";
+import { API_BASE } from "../config/api";
 
 const Team = () => {
   const { darkMode } = useTheme();
@@ -39,7 +38,7 @@ const Team = () => {
 
     try {
       setIsLoading(true);
-      const res = await fetch("http://localhost:5000/api/users/me", {
+      const res = await fetch(`${API_BASE}/api/users/me`, {
         headers: { "Authorization": `Bearer ${token}` }
       });
       const data = await res.json();
@@ -61,7 +60,7 @@ const Team = () => {
     setIsSubmitting(true);
 
     try {
-      const res = await fetch("http://localhost:5000/api/organizations/create", {
+      const res = await fetch(`${API_BASE}/api/organizations/create`, {
         method: "POST",
         headers: { 
           "Content-Type": "application/json",

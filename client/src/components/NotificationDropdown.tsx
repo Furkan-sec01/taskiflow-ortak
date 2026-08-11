@@ -1,5 +1,6 @@
 import toast from "react-hot-toast";
 import { useState, useEffect } from "react";
+import { API_BASE } from "../config/api";
 import { Bell, Check, X, Info, Sparkles, CheckCheck } from "lucide-react"; // CheckCheck ikonu eklendi
 
 const NotificationDropdown = () => {
@@ -12,13 +13,17 @@ const NotificationDropdown = () => {
   const fetchNotifications = async () => {
     if (!token) return;
     try {
-      const res = await fetch("http://localhost:5000/api/notifications", {
+      const res = await fetch(`${API_BASE}/api/notifications`, {
         headers: { "Authorization": `Bearer ${token}` }
       });
       const data = await res.json();
       if (Array.isArray(data)) {
-        // Okunmamış olanları en üstte gösterebiliriz veya sadece listeyi alırız
-        setNotifications(data);
+        // Sunucu okunmuş/okunmamış ayrımı yapmadan hepsini döner. Bu açılır
+        // menü "gelen kutusu" değil bildirim rozeti: sadece OKUNMAMIŞ olanları
+        // gösterir. Eskiden hepsi gösteriliyordu, bu yüzden "tümünü okundu
+        // işaretle" dedikten 60 saniye sonra aynı bildirimler "yeni" olarak
+        // geri geliyordu. Geçmişin tamamı /notifications sayfasında duruyor.
+        setNotifications(data.filter((n: any) => !n.isRead));
       }
     } catch (error) {
       console.error("Bildirimler çekilemedi:", error);
@@ -35,7 +40,7 @@ const NotificationDropdown = () => {
   const markAsRead = async (notificationId: string) => {
     setLoading(true);
     try {
-      const res = await fetch(`http://localhost:5000/api/notifications/${notificationId}/read`, {
+      const res = await fetch(`${API_BASE}/api/notifications/${notificationId}/read`, {
         method: "PATCH", // veya PUT, backend'deki rotaya göre
         headers: { "Authorization": `Bearer ${token}` }
       });
@@ -56,7 +61,7 @@ const NotificationDropdown = () => {
     if(notifications.length === 0) return;
     setLoading(true);
     try {
-      const res = await fetch(`http://localhost:5000/api/notifications/read-all`, {
+      const res = await fetch(`${API_BASE}/api/notifications/read-all`, {
         method: "PATCH", 
         headers: { "Authorization": `Bearer ${token}` }
       });
@@ -76,7 +81,7 @@ const NotificationDropdown = () => {
   setLoading(true);
 
   try {
-    const res = await fetch("http://localhost:5000/api/notifications/respond-invite", {
+    const res = await fetch(`${API_BASE}/api/notifications/respond-invite`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -85,7 +90,7 @@ const NotificationDropdown = () => {
       body: JSON.stringify({ notificationId, action })
     });
 
-    const data = await res.json();
+    const data = await res.json().catch(() => ({}));
 
     if (res.ok) {
       setNotifications(prev => prev.filter(n => n.id !== notificationId));
@@ -96,6 +101,10 @@ const NotificationDropdown = () => {
       } else {
         toast("İşlem tamamlandı.");
       }
+    } else {
+      // Eskiden hata durumunda hiçbir şey olmuyordu: kullanıcı "Katıl"a
+      // basıyor, bildirim duruyor, neden olmadığını anlamıyordu.
+      toast.error(data.error || "İşlem tamamlanamadı.");
     }
 
   } catch (error) {

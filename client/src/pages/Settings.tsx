@@ -2,6 +2,7 @@ import toast from "react-hot-toast";
 import { useState, useEffect } from "react";
 import { useTheme } from "../context/ThemeContext";
 import { Moon, Sun, Save, User, CheckCircle } from "lucide-react";
+import { API_BASE } from "../config/api";
 
 const SettingsPage = () => {
   const { darkMode, setDarkMode } = useTheme();
@@ -23,7 +24,7 @@ const SettingsPage = () => {
     const token = localStorage.getItem("token");
     if (!token) return;
 
-    fetch("http://localhost:5000/api/users/me", {
+    fetch(`${API_BASE}/api/users/me`, {
       headers: { "Authorization": `Bearer ${token}` }
     })
       .then(res => {
@@ -47,7 +48,7 @@ const SettingsPage = () => {
     const token = localStorage.getItem("token");
 
     try {
-      const res = await fetch("http://localhost:5000/api/users/profile", {
+      const res = await fetch(`${API_BASE}/api/users/profile`, {
         method: "PUT",
         headers: { 
           "Content-Type": "application/json",

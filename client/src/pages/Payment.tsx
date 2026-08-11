@@ -4,14 +4,21 @@ import { useNavigate, useSearchParams, Link } from "react-router-dom";
 import { useTheme } from "../context/ThemeContext";
 import { CreditCard, Lock, CheckCircle, ArrowLeft, Shield, AlertCircle } from "lucide-react";
 import Logo from "../components/Logo";
+import { API_BASE } from "../config/api";
+import { PLAN_LABELS, PLAN_PRICES, isPlanCode, isPurchasablePlan } from "../config/plans";
 
 const Payment = () => {
   const { darkMode } = useTheme();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  
-  const planName = searchParams.get("plan") || "Profesyonel";
-  const price = parseInt(searchParams.get("price") || "99");
+
+  // URL'den plan KODU gelir (FREE/PRO/BUSINESS), ekrandaki Türkçe etiket değil.
+  // Fiyat da URL'den okunmaz; hem etiket hem tutar tek kaynaktan türetilir ki
+  // gösterilen tutar sunucunun tahsil ettiği tutarla aynı olsun.
+  const planParam = searchParams.get("plan");
+  const planCode = isPlanCode(planParam) ? planParam : null;
+  const planName = planCode ? PLAN_LABELS[planCode] : "";
+  const price = planCode ? PLAN_PRICES[planCode] : 0;
 
   const [formData, setFormData] = useState({
     cardNumber: "",
@@ -36,11 +43,12 @@ const Payment = () => {
   }, [iyzicoHtml]);
 
   useEffect(() => {
-    // Eğer plan ve fiyat yoksa ana sayfaya yönlendir
-    if (!searchParams.get("plan") || !searchParams.get("price")) {
+    // Geçersiz plan kodu ya da ödeme akışına girmemesi gereken bir plan
+    // (FREE / BUSINESS) ile gelinmişse plan seçimine geri gönder.
+    if (!planCode || !isPurchasablePlan(planCode)) {
       navigate("/plans");
     }
-  }, [searchParams, navigate]);
+  }, [planCode, navigate]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -115,16 +123,10 @@ const Payment = () => {
     return Object.keys(newErrors).length === 0;
   };
 
-  const planKeyMap: Record<string, string> = {
-    "Başlangıç Planı": "FREE",
-    "Profesyonel": "PRO",
-    "Kurumsal": "BUSINESS",
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!validateForm()) {
+    if (!planCode || !validateForm()) {
       return;
     }
 
@@ -134,14 +136,14 @@ const Payment = () => {
       const token = localStorage.getItem("token");
       const [expMonth, expYear] = formData.expiryDate.split("/");
 
-      const response = await fetch("/api/payments/initialize-3ds", {
+      const response = await fetch(`${API_BASE}/api/payments/initialize-3ds`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          plan: planKeyMap[planName] || "PRO",
+          plan: planCode,
           email: formData.email,
           card: {
             name: formData.cardName,
@@ -172,6 +174,12 @@ const Payment = () => {
     return (
       <div className="w-full h-screen bg-white" dangerouslySetInnerHTML={{ __html: iyzicoHtml }} />
     );
+  }
+
+  // Yukarıdaki useEffect /plans'e yönlendiriyor; o gerçekleşene kadar formu
+  // boş plan bilgisiyle göstermemek için hiçbir şey basmıyoruz.
+  if (!planCode) {
+    return null;
   }
 
   return (

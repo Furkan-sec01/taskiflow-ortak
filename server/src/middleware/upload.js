@@ -22,7 +22,9 @@ const allowedMimeTypes = ["image/jpeg", "image/png", "image/webp"];
 
 const fileFilter = (req, file, cb) => {
   if (!allowedMimeTypes.includes(file.mimetype)) {
-    return cb(new Error("Sadece JPEG, PNG veya WEBP formatında resim yükleyebilirsiniz."));
+    const error = new Error("Sadece JPEG, PNG veya WEBP formatında resim yükleyebilirsiniz.");
+    error.statusCode = 400;
+    return cb(error);
   }
   cb(null, true);
 };

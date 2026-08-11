@@ -1,6 +1,8 @@
 import toast from "react-hot-toast";
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { Lock, Shield, Monitor, Smartphone, AlertTriangle, Eye, EyeOff } from "lucide-react";
+import { API_BASE } from "../config/api";
 
 interface ToggleProps {
   enabled: boolean;
@@ -82,7 +84,16 @@ type SessionItem = {
   current: boolean;
 };
 
+// Sunucu, başkalarının çalışmasını silmemek için hesap silmeyi 409 ile
+// reddedebilir: kullanıcı hâlâ başka üyesi olan bir ekibin/projenin sahibiyse.
+// O durumda hangi kayıtların engellediğini kullanıcıya göstermemiz gerekiyor.
+type BlockingItems = {
+  organizations: { id: string; name: string; memberCount: number }[];
+  projects: { id: string; title: string }[];
+};
+
 export default function SecurityPage() {
+  const navigate = useNavigate();
   const [curPass, setCurPass] = useState("");
   const [newPass, setNewPass] = useState("");
   const [confPass, setConfPass] = useState("");
@@ -96,19 +107,25 @@ export default function SecurityPage() {
   const [sessions, setSessions] = useState<SessionItem[]>([]);
   const [userEmail, setUserEmail] = useState("");
 
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deletePass, setDeletePass] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
+  const [blocking, setBlocking] = useState<BlockingItems | null>(null);
+
   const strength = getStrength(newPass);
 
   useEffect(() => {
     const token = localStorage.getItem("token");
 
-    fetch("http://localhost:5000/api/sessions", {
+    fetch(`${API_BASE}/api/sessions`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((res) => res.json())
       .then((data) => setSessions(Array.isArray(data) ? data : []))
       .catch(() => setSessions([]));
 
-    fetch("http://localhost:5000/api/users/me", {
+    fetch(`${API_BASE}/api/users/me`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((res) => res.json())
@@ -129,7 +146,7 @@ export default function SecurityPage() {
 
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch("http://localhost:5000/api/users/change-password", {
+      const res = await fetch(`${API_BASE}/api/users/change-password`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -162,7 +179,7 @@ export default function SecurityPage() {
   const handleTerminateSession = async (sessionId: string) => {
     const token = localStorage.getItem("token");
     try {
-      const res = await fetch(`http://localhost:5000/api/sessions/${sessionId}`, {
+      const res = await fetch(`${API_BASE}/api/sessions/${sessionId}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -173,10 +190,68 @@ export default function SecurityPage() {
     }
   };
 
+  const closeDeleteModal = () => {
+    if (deleting) return;
+    setDeleteOpen(false);
+    setDeletePass("");
+    setDeleteError("");
+    setBlocking(null);
+  };
+
+  const handleDeleteAccount = async () => {
+    setDeleteError("");
+    setBlocking(null);
+
+    if (!deletePass) {
+      setDeleteError("Devam etmek için şifrenizi girin.");
+      return;
+    }
+
+    setDeleting(true);
+
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${API_BASE}/api/users/me`, {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ password: deletePass }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        if (res.status === 409) {
+          setBlocking({
+            organizations: data.blockingOrganizations || [],
+            projects: data.blockingProjects || [],
+          });
+        }
+        throw new Error(data.error || "Hesap silinemedi.");
+      }
+
+      // Oturum kayıtları sunucuda kullanıcıyla birlikte silindi, token artık
+      // geçersiz. Yereldeki kalıntıyı da temizlemezsek uygulama silinmiş bir
+      // kullanıcıyla giriş yapılmış gibi davranmaya çalışır.
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
+      localStorage.removeItem("activeOrgId");
+
+      toast.success("Hesabınız kalıcı olarak silindi.");
+      navigate("/login", { replace: true });
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : "Bir hata oluştu.");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   const handleTerminateAllOthers = async () => {
     const token = localStorage.getItem("token");
     try {
-      const res = await fetch("http://localhost:5000/api/sessions/others", {
+      const res = await fetch(`${API_BASE}/api/sessions/others`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -344,9 +419,22 @@ export default function SecurityPage() {
         </div>
         <p className="text-xs text-gray-400 mb-4">Bu işlemler geri alınamaz</p>
 
+        {/* Eylemler artık etiket metniyle eşleştirilmiyor; her satır kendi
+            onClick'ini taşıyor. "Hesabı sil" butonu daha önce
+            onClick={undefined} ile duruyordu, yani hiçbir şey yapmıyordu. */}
         {[
-          { label: "Tüm oturumları sonlandır", desc: "Bu cihaz dışındaki tüm oturumları kapat" },
-          { label: "Hesabı sil", desc: "Tüm veriler kalıcı olarak silinir" },
+          {
+            label: "Tüm oturumları sonlandır",
+            desc: "Bu cihaz dışındaki tüm oturumları kapat",
+            action: "Sonlandır",
+            onClick: handleTerminateAllOthers,
+          },
+          {
+            label: "Hesabı sil",
+            desc: "Hesabınız ve tüm verileriniz kalıcı olarak silinir",
+            action: "Hesabı sil",
+            onClick: () => setDeleteOpen(true),
+          },
         ].map((item, i, arr) => (
           <div
             key={item.label}
@@ -357,14 +445,88 @@ export default function SecurityPage() {
               <p className="text-xs text-gray-400 mt-0.5">{item.desc}</p>
             </div>
             <button
-              onClick={item.label === "Tüm oturumları sonlandır" ? handleTerminateAllOthers : undefined}
+              onClick={item.onClick}
               className="px-3 py-1.5 rounded-lg text-sm font-medium bg-red-50 text-red-700 border border-red-100 hover:bg-red-100 transition-colors"
             >
-              {item.label === "Hesabı sil" ? "Hesabı sil" : "Sonlandır"}
+              {item.action}
             </button>
           </div>
         ))}
       </div>
+
+      {/* Hesap silme onay penceresi. Sunucu şifreyi tekrar istediği için
+          window.confirm yetmiyor. */}
+      {deleteOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onClick={closeDeleteModal}
+        >
+          <div
+            className="w-full max-w-md rounded-xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 p-6 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-2 mb-2">
+              <AlertTriangle size={16} className="text-red-500" />
+              <p className="text-base font-semibold text-red-700">Hesabı kalıcı olarak sil</p>
+            </div>
+
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+              Bu işlem <strong>geri alınamaz</strong>. Kişisel görevleriniz, belgeleriniz,
+              bildirimleriniz, ödeme geçmişiniz ve yalnızca size ait ekipler ile projeler
+              kalıcı olarak silinir.
+            </p>
+
+            {/* 409: hangi kayıtların engellediğini tek tek göster ki kullanıcı
+                ne yapması gerektiğini bilsin. */}
+            {blocking && (blocking.organizations.length > 0 || blocking.projects.length > 0) && (
+              <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-800 p-3">
+                <p className="text-xs font-semibold text-amber-800 dark:text-amber-300 mb-2">
+                  Önce bunları devretmeniz veya silmeniz gerekiyor:
+                </p>
+                <ul className="space-y-1">
+                  {blocking.organizations.map((org) => (
+                    <li key={org.id} className="text-xs text-amber-800 dark:text-amber-300">
+                      • <strong>{org.name}</strong> ekibi ({org.memberCount} üye)
+                    </li>
+                  ))}
+                  {blocking.projects.map((project) => (
+                    <li key={project.id} className="text-xs text-amber-800 dark:text-amber-300">
+                      • <strong>{project.title}</strong> projesi
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            <PasswordInput
+              label="Onaylamak için şifreniz"
+              value={deletePass}
+              onChange={setDeletePass}
+            />
+
+            {deleteError && (
+              <p className="text-xs text-red-600 dark:text-red-400 mt-3">{deleteError}</p>
+            )}
+
+            <div className="flex justify-end gap-2 mt-5">
+              <button
+                onClick={closeDeleteModal}
+                disabled={deleting}
+                className="px-4 py-2 rounded-lg text-sm font-medium text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors disabled:opacity-60"
+              >
+                Vazgeç
+              </button>
+              <button
+                onClick={handleDeleteAccount}
+                disabled={deleting || !deletePass}
+                className="px-4 py-2 rounded-lg text-sm font-medium bg-red-600 text-white hover:bg-red-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {deleting ? "Siliniyor..." : "Hesabımı kalıcı olarak sil"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
