@@ -1,4 +1,5 @@
 const { PrismaClient } = require("@prisma/client");
+const { collectDocumentPaths, removeFiles } = require("../utils/fileCleanup");
 const prisma = new PrismaClient();
 
 const PLAN_PROJECT_LIMITS = {
@@ -51,6 +52,24 @@ exports.createProject = async (req, res) => {
     }
 
     try {
+        // Kullanıcının bu organizasyonun üyesi olduğunu doğrula. Bu kontrol
+        // yoktu: istemciden herhangi bir organizationId gönderen kişi, üyesi
+        // olmadığı bir ekibin içinde proje açabiliyordu.
+        const membership = await prisma.user_Organization.findUnique({
+            where: {
+                userId_organizationId: {
+                    userId: userId,
+                    organizationId: organizationId
+                }
+            }
+        });
+
+        if (!membership) {
+            return res.status(403).json({
+                error: "Bu ekipte proje oluşturma yetkiniz yok."
+            });
+        }
+
         const subscription = await prisma.subscription.findFirst({
             where: {
                 userId,
@@ -180,11 +199,19 @@ exports.deleteProject = async (req, res) => {
             return res.status(403).json({ error: "Proje silme yetkini yok." });
         }
 
+        // Proje -> sütun -> görev -> ek zinciri cascade ile siliniyor;
+        // dosyaların diskte kalmaması için yolları önce topluyoruz.
+        const attachmentPaths = await collectDocumentPaths(prisma, {
+            task: { projectId }
+        });
+
         await prisma.project.delete({
             where: {
                 id: projectId
             }
         });
+
+        removeFiles(attachmentPaths);
 
         res.status(200).json({ message: "Proje başarıyla silindi." });
     } catch (error) {
@@ -198,8 +225,19 @@ exports.updateBackground = async (req, res) => {
     const userId = req.user.id || req.user.userId;
 
     try {
-        if (backgroundIndex === undefined || backgroundIndex === null) {
-            return res.status(400).json({ error: "backgroundIndex zorunludur." });
+        // "Arkaplanı temizle" istemciden null olarak geliyordu ve burada 400 ile
+        // reddediliyordu; istemci yanıta bakmadığı için temizleme sessizce hiç
+        // kaydedilmiyordu. Artık null/-1 "arkaplan yok" anlamına geliyor.
+        // (Column.backgroundIndex Int NOT NULL olduğu için -1 olarak saklanır.)
+        const NO_BACKGROUND = -1;
+
+        const parsedIndex =
+            backgroundIndex === null || backgroundIndex === undefined
+                ? NO_BACKGROUND
+                : Number(backgroundIndex);
+
+        if (!Number.isInteger(parsedIndex) || parsedIndex < NO_BACKGROUND) {
+            return res.status(400).json({ error: "Geçersiz backgroundIndex." });
         }
 
         const project = await prisma.project.findUnique({
@@ -223,7 +261,7 @@ exports.updateBackground = async (req, res) => {
 
         const updatedProject = await prisma.project.update({
             where: { id: projectId },
-            data: { backgroundIndex: Number(backgroundIndex) }
+            data: { backgroundIndex: parsedIndex }
         });
 
         res.status(200).json({
@@ -271,7 +309,24 @@ exports.getProjectBoard = async (req, res) => {
                     include: {
                         tasks: {
                             orderBy: { order: "asc" },
-                            include: { assignee: { select: { name: true, email: true } } }
+                            include: {
+                                assignee: { select: { name: true, email: true } },
+                                // Yorum ve ekler pano yanıtında geliyor ki görev
+                                // detayı açıldığında ayrı bir istek beklemeden
+                                // dolu gelsin.
+                                comments: {
+                                    orderBy: { createdAt: "asc" },
+                                    include: {
+                                        author: { select: { id: true, name: true, email: true } }
+                                    }
+                                },
+                                attachments: {
+                                    orderBy: { createdAt: "desc" },
+                                    include: {
+                                        uploader: { select: { id: true, name: true, email: true } }
+                                    }
+                                }
+                            }
                         }
                     }
                 }

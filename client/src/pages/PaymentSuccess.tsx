@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Link, useSearchParams, useNavigate } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { useTheme } from "../context/ThemeContext";
 import { CheckCircle, ArrowRight, Download, Mail, Loader2 } from "lucide-react";
 import Logo from "../components/Logo";
@@ -15,7 +15,6 @@ const PLAN_LABELS: Record<string, string> = {
 const PaymentSuccess = () => {
   const { darkMode } = useTheme();
   const [searchParams] = useSearchParams();
-  const navigate = useNavigate();
 
   // URL parametreleri sadece backend'den veri gelene kadar geçici fallback
   const fallbackPlanName = searchParams.get("plan") || "Profesyonel";

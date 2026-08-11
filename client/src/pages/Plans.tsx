@@ -1,14 +1,33 @@
-import { Link } from "react-router-dom";
+import toast from "react-hot-toast";
+import { useEffect } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { useTheme } from "../context/ThemeContext";
-import { 
-  Check, Star, Shield, Zap, 
-  Facebook, Twitter, Instagram, Linkedin 
+import {
+  Check, Star, Shield, Zap
 } from "lucide-react";
 import Logo from "../components/Logo";
 import { PLAN_LABELS, PLAN_PRICES, type PlanCode } from "../config/plans";
 
 const Plans = () => {
   const { darkMode } = useTheme();
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Ödeme yarıda kalıp buraya geri yönlendirildiyse sebebini göster.
+  // Mesajı sunucu üretir (server/src/config/iyzicoErrors.js): kart/banka
+  // kaynaklı hatalarda gerçek sebep, bizim taraf hatalarında genel mesaj gelir.
+  useEffect(() => {
+    if (!searchParams.get("paymentError")) return;
+
+    toast.error(
+      searchParams.get("paymentMessage") ||
+        "Ödeme tamamlanamadı. Lütfen tekrar deneyin."
+    );
+
+    // Sayfa yenilendiğinde aynı uyarı tekrar çıkmasın.
+    searchParams.delete("paymentError");
+    searchParams.delete("paymentMessage");
+    setSearchParams(searchParams, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   // Ödeme Başlatma Fonksiyonu
   const handleCheckout = (code: PlanCode) => {

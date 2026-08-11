@@ -1,19 +1,32 @@
 import toast from "react-hot-toast";
 import React, { useState, useRef, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { useTheme } from "../context/ThemeContext";
 import { Play, Square, Clock, CheckCircle2, UserPlus, X } from "lucide-react";
 import { API_BASE } from "../config/api";
 
 // --- Tipler ---
 type PriorityType = "HIGH" | "MEDIUM" | "LOW";
+
+// Yazar/yükleyen null olabilir: hesabını silmiş kullanıcıların yorumları
+// kayboluyor değil, sahipsiz kalıyor (TaskComment.authorId SetNull).
+type PersonRef = { id: string; name: string | null; email: string } | null;
+
 type CommentType = {
   id: string;
-  user: string;
-  text: string;
+  content: string;
   createdAt: string;
+  author: PersonRef;
 };
-type AttachmentType = { id: string; name: string; date: string; url: string };
+
+type AttachmentType = {
+  id: string;
+  name: string;
+  type: string;
+  size: number;
+  url: string;
+  createdAt: string;
+  uploader: PersonRef;
+};
 
 type TaskType = {
   id: string;
@@ -42,7 +55,6 @@ type MemberType = { id: string; name: string; email: string };
 const Proje: React.FC = () => {
   const { projectId } = useParams();
   const navigate = useNavigate();
-  const { darkMode } = useTheme();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const taskAttachmentRef = useRef<HTMLInputElement>(null);
 
@@ -59,6 +71,8 @@ const Proje: React.FC = () => {
 
   const [selectedTask, setSelectedTask] = useState<TaskType | null>(null);
   const [commentText, setCommentText] = useState("");
+  const [isPostingComment, setIsPostingComment] = useState(false);
+  const [isUploadingAttachment, setIsUploadingAttachment] = useState(false);
 
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [isColModalOpen, setIsColModalOpen] = useState(false);
@@ -93,11 +107,14 @@ const Proje: React.FC = () => {
     },
   ];
 
+  // index === null => "arkaplanı temizle". Sunucu bunu -1 olarak saklar.
+  // Eskiden yanıt hiç kontrol edilmiyordu: sunucu null'ı 400 ile reddediyor,
+  // arkaplan ekranda siliniyor ama kaydedilmiyordu. Yenileyince geri geliyordu.
   const saveBackground = async (index: number | null) => {
     const token = localStorage.getItem("token");
 
     try {
-      await fetch(`${API_BASE}/api/project/${projectId}/background`, {
+      const res = await fetch(`${API_BASE}/api/project/${projectId}/background`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -107,8 +124,18 @@ const Proje: React.FC = () => {
           backgroundIndex: index,
         }),
       });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Arkaplan kaydedilemedi.");
+      }
     } catch (err) {
-      console.error(err);
+      console.error("Arkaplan kaydedilemedi:", err);
+      toast.error(
+        err instanceof Error ? err.message : "Arkaplan kaydedilemedi.",
+      );
+      // Ekrandakini sunucudaki gerçek değere geri çek.
+      fetchBoard();
     }
   };
 
@@ -454,6 +481,163 @@ const Proje: React.FC = () => {
     }
   };
 
+  // Tek bir görevi panoda yerinde günceller. Yukarıdaki [columns] effect'i
+  // selectedTask'i buradan türettiği için ayrıca setSelectedTask gerekmiyor.
+  // Bunun yerine fetchBoard() çağırmak, her yorum/ek işleminde tüm panoyu
+  // (bütün görevlerin yorum ve ekleriyle birlikte) yeniden indirmek olurdu.
+  const patchTask = (taskId: string, patch: (task: TaskType) => TaskType) => {
+    setColumns((prev) =>
+      prev.map((col) => ({
+        ...col,
+        tasks: col.tasks.map((t) => (t.id === taskId ? patch(t) : t)),
+      })),
+    );
+  };
+
+  //görev yorumu ekleme
+  const handleAddComment = async () => {
+    if (!selectedTask || !commentText.trim() || isPostingComment) return;
+
+    setIsPostingComment(true);
+    const token = localStorage.getItem("token");
+
+    try {
+      const res = await fetch(
+        `${API_BASE}/api/tasks/${selectedTask.id}/comments`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ content: commentText.trim() }),
+        },
+      );
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) throw new Error(data.error || "Yorum eklenemedi.");
+
+      patchTask(selectedTask.id, (t) => ({
+        ...t,
+        comments: [...(t.comments || []), data],
+      }));
+      setCommentText("");
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Yorum eklenemedi.",
+      );
+    } finally {
+      setIsPostingComment(false);
+    }
+  };
+
+  //görev yorumu silme
+  const handleDeleteComment = async (commentId: string) => {
+    if (!selectedTask) return;
+    if (!window.confirm("Bu yorumu silmek istediğinize emin misiniz?")) return;
+
+    const token = localStorage.getItem("token");
+
+    try {
+      const res = await fetch(
+        `${API_BASE}/api/tasks/${selectedTask.id}/comments/${commentId}`,
+        {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      );
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) throw new Error(data.error || "Yorum silinemedi.");
+
+      patchTask(selectedTask.id, (t) => ({
+        ...t,
+        comments: (t.comments || []).filter((c) => c.id !== commentId),
+      }));
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Yorum silinemedi.",
+      );
+    }
+  };
+
+  //göreve dosya ekleme
+  const handleAddAttachment = async (file: File) => {
+    if (!selectedTask) return;
+
+    setIsUploadingAttachment(true);
+    const token = localStorage.getItem("token");
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const res = await fetch(
+        `${API_BASE}/api/tasks/${selectedTask.id}/attachments`,
+        {
+          method: "POST",
+          // Content-Type BİLEREK yok: FormData ile tarayıcının kendi
+          // boundary'sini üretmesi gerekiyor, elle yazılırsa multer okuyamaz.
+          headers: { Authorization: `Bearer ${token}` },
+          body: formData,
+        },
+      );
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) throw new Error(data.error || "Dosya eklenemedi.");
+
+      patchTask(selectedTask.id, (t) => ({
+        ...t,
+        attachments: [data, ...(t.attachments || [])],
+      }));
+      toast.success("Dosya eklendi.");
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Dosya eklenemedi.",
+      );
+    } finally {
+      setIsUploadingAttachment(false);
+    }
+  };
+
+  //görev ekini silme
+  const handleDeleteAttachment = async (attachmentId: string) => {
+    if (!selectedTask) return;
+    if (!window.confirm("Bu eki silmek istediğinize emin misiniz?")) return;
+
+    const token = localStorage.getItem("token");
+
+    try {
+      const res = await fetch(
+        `${API_BASE}/api/tasks/${selectedTask.id}/attachments/${attachmentId}`,
+        {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      );
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) throw new Error(data.error || "Ek silinemedi.");
+
+      patchTask(selectedTask.id, (t) => ({
+        ...t,
+        attachments: (t.attachments || []).filter((a) => a.id !== attachmentId),
+      }));
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Ek silinemedi.");
+    }
+  };
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
   const handleDragStart = (e: React.DragEvent, taskId: string) =>
     e.dataTransfer.setData("taskId", taskId);
 
@@ -586,7 +770,17 @@ const Proje: React.FC = () => {
               const file = e.target.files?.[0];
               if (file) {
                 const r = new FileReader();
-                r.onloadend = () => setBgImage(r.result as string);
+                r.onloadend = () => {
+                  setBgImage(r.result as string);
+                  // Kendi görselini yükleme sunucuda desteklenmiyor: proje
+                  // sadece hazır arkaplanların indeksini saklıyor
+                  // (Project.backgroundIndex), dosya yükleme ucu yok. Görsel
+                  // yalnızca bu sekmede duruyor. Sessizce kaybolmasındansa
+                  // kullanıcıya söylemek daha dürüst.
+                  toast("Bu görsel yalnızca bu oturumda görünür, kaydedilmez.", {
+                    icon: "ℹ️",
+                  });
+                };
                 r.readAsDataURL(file);
               }
             }}
@@ -858,39 +1052,62 @@ const Proje: React.FC = () => {
                     </p>
                     <button
                       onClick={() => taskAttachmentRef.current?.click()}
-                      className="bg-indigo-50 text-indigo-600 px-4 py-2 rounded-xl text-[10px] font-black hover:bg-indigo-100 transition-colors uppercase"
+                      disabled={isUploadingAttachment}
+                      className="bg-indigo-50 text-indigo-600 px-4 py-2 rounded-xl text-[10px] font-black hover:bg-indigo-100 transition-colors uppercase disabled:opacity-50"
                     >
-                      Dosya Yükle
+                      {isUploadingAttachment ? "Yükleniyor..." : "Dosya Yükle"}
                     </button>
                     <input
                       type="file"
                       ref={taskAttachmentRef}
                       className="hidden"
-                      accept="image/*"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) handleAddAttachment(file);
+                        // Aynı dosya arka arkaya seçilebilsin diye sıfırla.
+                        e.target.value = "";
+                      }}
                     />
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
-                    {selectedTask.attachments?.map((att) => (
-                      <div
-                        key={att.id}
-                        className="border-2 border-gray-50 rounded-2xl p-3 flex items-center gap-4 bg-white hover:border-indigo-100 transition-all cursor-pointer group"
-                      >
-                        <div className="w-14 h-14 bg-gray-100 rounded-xl flex items-center justify-center text-[10px] font-black text-gray-400 group-hover:bg-indigo-50 group-hover:text-indigo-400 transition-colors">
-                          IMG
+                    {selectedTask.attachments && selectedTask.attachments.length > 0 ? (
+                      selectedTask.attachments.map((att) => (
+                        <div
+                          key={att.id}
+                          className="border-2 border-gray-50 rounded-2xl p-3 flex items-center gap-4 bg-white hover:border-indigo-100 transition-all group relative"
+                        >
+                          <a
+                            href={`${API_BASE}${att.url}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="flex items-center gap-4 flex-1 min-w-0"
+                          >
+                            <div className="w-14 h-14 bg-gray-100 rounded-xl flex items-center justify-center text-[9px] font-black text-gray-400 group-hover:bg-indigo-50 group-hover:text-indigo-400 transition-colors uppercase shrink-0">
+                              {att.type}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs font-bold text-gray-800 truncate">
+                                {att.name}
+                              </p>
+                              <p className="text-[9px] font-black text-gray-400 uppercase mt-1">
+                                {formatFileSize(att.size)} ·{" "}
+                                {new Date(att.createdAt).toLocaleDateString("tr-TR")}
+                              </p>
+                            </div>
+                          </a>
+                          <button
+                            onClick={() => handleDeleteAttachment(att.id)}
+                            title="Eki sil"
+                            className="p-2 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all shrink-0"
+                          >
+                            <X size={14} />
+                          </button>
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-bold text-gray-800 truncate">
-                            {att.name}
-                          </p>
-                          <p className="text-[9px] font-black text-gray-400 uppercase mt-1">
-                            {att.date}
-                          </p>
-                        </div>
-                      </div>
-                    )) || (
+                      ))
+                    ) : (
                       <div className="col-span-2 py-8 border-2 border-dashed border-gray-100 rounded-2xl text-center text-[10px] font-black text-gray-300 uppercase tracking-widest">
-                        Henüz bir görsel yok
+                        Henüz dosya eklenmedi
                       </div>
                     )}
                   </div>
@@ -906,39 +1123,71 @@ const Proje: React.FC = () => {
                   <textarea
                     value={commentText}
                     onChange={(e) => setCommentText(e.target.value)}
+                    onKeyDown={(e) => {
+                      // Ctrl/Cmd + Enter ile gönder.
+                      if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+                        e.preventDefault();
+                        handleAddComment();
+                      }
+                    }}
+                    maxLength={2000}
                     placeholder="Bir yorum bırakın..."
                     className="w-full bg-white border-none rounded-2xl p-5 text-sm font-medium focus:ring-2 focus:ring-indigo-500 resize-none h-28 shadow-sm placeholder:text-gray-300"
                   />
-                  <div className="flex justify-end mt-3">
-                    <button className="bg-indigo-600 text-white px-6 py-3 rounded-xl text-[10px] font-black hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 uppercase tracking-widest">
-                      Yorum Yap
+                  <div className="flex justify-between items-center mt-3">
+                    <span className="text-[9px] font-bold text-gray-300 uppercase tracking-widest">
+                      {commentText.length > 0 && `${commentText.length}/2000`}
+                    </span>
+                    <button
+                      onClick={handleAddComment}
+                      disabled={isPostingComment || !commentText.trim()}
+                      className="bg-indigo-600 text-white px-6 py-3 rounded-xl text-[10px] font-black hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 uppercase tracking-widest disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      {isPostingComment ? "Gönderiliyor..." : "Yorum Yap"}
                     </button>
                   </div>
                 </div>
 
                 <div className="space-y-6 overflow-y-auto pr-2 custom-scrollbar">
-                  {selectedTask.comments?.map((comment) => (
-                    <div key={comment.id} className="flex gap-4">
-                      <div className="w-9 h-9 rounded-full bg-white shadow-sm flex items-center justify-center text-indigo-600 text-[10px] font-black border border-gray-100 flex-shrink-0">
-                        {comment.user.charAt(0)}
-                      </div>
-                      <div className="flex-1">
-                        <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-50">
-                          <div className="flex justify-between items-center mb-2">
-                            <p className="text-[11px] font-black text-gray-900 uppercase tracking-tighter">
-                              {comment.user}
-                            </p>
-                            <span className="text-[9px] font-bold text-gray-400 italic">
-                              {comment.createdAt}
-                            </span>
+                  {selectedTask.comments && selectedTask.comments.length > 0 ? (
+                    selectedTask.comments.map((comment) => {
+                      const authorName = comment.author?.name || comment.author?.email || "Silinmiş kullanıcı";
+
+                      return (
+                        <div key={comment.id} className="flex gap-4 group">
+                          <div className="w-9 h-9 rounded-full bg-white shadow-sm flex items-center justify-center text-indigo-600 text-[10px] font-black border border-gray-100 flex-shrink-0 uppercase">
+                            {authorName.charAt(0)}
                           </div>
-                          <p className="text-xs text-gray-600 leading-relaxed font-medium">
-                            {comment.text}
-                          </p>
+                          <div className="flex-1">
+                            <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-50 relative">
+                              <button
+                                onClick={() => handleDeleteComment(comment.id)}
+                                title="Yorumu sil"
+                                className="absolute top-3 right-3 p-1.5 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
+                              >
+                                <X size={12} />
+                              </button>
+                              <div className="flex justify-between items-center mb-2 pr-6">
+                                <p className="text-[11px] font-black text-gray-900 uppercase tracking-tighter">
+                                  {authorName}
+                                </p>
+                                <span className="text-[9px] font-bold text-gray-400 italic">
+                                  {new Date(comment.createdAt).toLocaleString("tr-TR")}
+                                </span>
+                              </div>
+                              <p className="text-xs text-gray-600 leading-relaxed font-medium whitespace-pre-wrap">
+                                {comment.content}
+                              </p>
+                            </div>
+                          </div>
                         </div>
-                      </div>
-                    </div>
-                  ))}
+                      );
+                    })
+                  ) : (
+                    <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest text-center py-8">
+                      Henüz yorum yok
+                    </p>
+                  )}
                 </div>
               </div>
             </div>

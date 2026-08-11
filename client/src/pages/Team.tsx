@@ -2,10 +2,8 @@ import toast from "react-hot-toast";
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTheme } from "../context/ThemeContext";
-import { 
-  Users, 
-  Plus, 
-  Trash2,
+import {
+  Plus,
   ArrowRightCircle,
   X
 } from "lucide-react";

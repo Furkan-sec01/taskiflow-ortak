@@ -14,6 +14,7 @@ import {
   ChevronRight,
   Trash2,
   Lock,
+  Crown,
   FileText          // 👈 Belgeler ikonu için eklendi
 } from "lucide-react";
 import { API_BASE } from "../config/api";
@@ -46,6 +47,18 @@ const OrganizationDetail = () => {
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
   const [isInviting, setIsInviting] = useState(false);
+
+  const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
+  const [selectedNewOwnerId, setSelectedNewOwnerId] = useState("");
+  const [transferProjects, setTransferProjects] = useState(true);
+  const [isTransferring, setIsTransferring] = useState(false);
+
+  // Sahiplik devri yalnızca mevcut sahibe ve devredilecek başka bir üye
+  // varsa gösterilir.
+  const isCurrentUserOwner = members.some(
+    (m) => m.id === currentUserId && m.role === "OWNER"
+  );
+  const transferCandidates = members.filter((m) => m.id !== currentUserId);
 
   useEffect(() => {
     fetchMembers();
@@ -146,6 +159,55 @@ const handleDeleteMember = async (memberId: string) => {
     toast.error("Sunucu bağlantı hatası.");
   }
 };
+
+  const handleTransferOwnership = async () => {
+    if (!selectedNewOwnerId) {
+      toast.error("Lütfen yeni sahibi seçin.");
+      return;
+    }
+
+    const newOwner = members.find((m) => m.id === selectedNewOwnerId);
+
+    if (
+      !window.confirm(
+        `"${newOwner?.name || newOwner?.email}" bu ekibin yeni sahibi olacak ve siz normal üyeye döneceksiniz.${
+          transferProjects ? " Bu ekipteki projeleriniz de ona devredilecek." : ""
+        } Devam edilsin mi?`
+      )
+    ) {
+      return;
+    }
+
+    setIsTransferring(true);
+    const token = localStorage.getItem("token");
+
+    try {
+      const res = await fetch(`${API_BASE}/api/organizations/${orgId}/transfer-ownership`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ newOwnerId: selectedNewOwnerId, transferProjects }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) throw new Error(data.error || "Sahiplik devredilemedi.");
+
+      toast.success(data.message || "Sahiplik devredildi.");
+      setIsTransferModalOpen(false);
+      setSelectedNewOwnerId("");
+
+      // Roller değişti: üye listesi ve (açıksa) proje listesi tazelensin.
+      fetchMembers();
+      if (activeTab === "projects") fetchOrgProjects();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Sunucu bağlantı hatası.");
+    } finally {
+      setIsTransferring(false);
+    }
+  };
 
   const handleLeaveTeam = async () => {
   const token = localStorage.getItem("token");
@@ -252,12 +314,105 @@ const handleDeleteTeam = async () => {
         </div>
       )}
 
+      {/* SAHİPLİK DEVRİ MODALI */}
+      {isTransferModalOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-md p-4">
+          <div className={`w-full max-w-md p-8 rounded-[2.5rem] shadow-2xl ${darkMode ? 'bg-gray-800 border border-gray-700' : 'bg-white'}`}>
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-2xl font-bold flex items-center gap-2">
+                <Crown size={22} className="text-amber-500" /> Sahipliği Devret
+              </h2>
+              <button onClick={() => setIsTransferModalOpen(false)} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors">
+                <X size={20} />
+              </button>
+            </div>
+
+            <p className="text-sm opacity-70 mb-6">
+              Seçtiğiniz üye ekibin yeni sahibi olacak, siz normal üyeye
+              döneceksiniz. Bu işlemi geri almak için yeni sahibin sahipliği
+              size geri devretmesi gerekir.
+            </p>
+
+            <label className="block text-xs font-bold uppercase tracking-wider opacity-50 mb-2">
+              Yeni sahip
+            </label>
+            <div className="space-y-2 max-h-56 overflow-y-auto mb-5">
+              {transferCandidates.map((member) => (
+                <button
+                  key={member.id}
+                  type="button"
+                  onClick={() => setSelectedNewOwnerId(member.id)}
+                  className={`w-full flex items-center gap-3 p-3 rounded-2xl border text-left transition-all ${
+                    selectedNewOwnerId === member.id
+                      ? 'border-amber-500 bg-amber-500/10'
+                      : darkMode ? 'border-gray-700 hover:border-gray-600' : 'border-gray-200 hover:border-gray-300'
+                  }`}
+                >
+                  <div className="w-9 h-9 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center font-bold text-white uppercase shrink-0">
+                    {(member.name || member.email || "?").charAt(0)}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="font-bold text-sm truncate">{member.name || "—"}</p>
+                    <p className="text-xs opacity-60 truncate">{member.email}</p>
+                  </div>
+                </button>
+              ))}
+            </div>
+
+            <label className="flex items-start gap-3 mb-6 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={transferProjects}
+                onChange={(e) => setTransferProjects(e.target.checked)}
+                className="mt-1"
+              />
+              <span className="text-sm opacity-80">
+                Bu ekipteki projelerimin sahipliğini de devret.
+                <span className="block text-xs opacity-60 mt-0.5">
+                  Kapatırsanız projeler sizde kalır; ekipten ayrılmak veya hesabınızı
+                  silmek isterseniz bunları ayrıca devretmeniz gerekir.
+                </span>
+              </span>
+            </label>
+
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setIsTransferModalOpen(false)}
+                disabled={isTransferring}
+                className={`flex-1 py-4 rounded-2xl font-bold disabled:opacity-60 ${darkMode ? 'bg-gray-700' : 'bg-gray-100'}`}
+              >
+                İptal
+              </button>
+              <button
+                type="button"
+                onClick={handleTransferOwnership}
+                disabled={isTransferring || !selectedNewOwnerId}
+                className="flex-1 py-4 bg-amber-500 text-white rounded-2xl font-bold shadow-lg disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {isTransferring ? "Devrediliyor..." : "Devret"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ÜST BAR */}
       <div className="max-w-6xl mx-auto flex justify-between items-center mb-10">
         <button onClick={() => navigate("/team")} className="flex items-center gap-2 opacity-70 hover:opacity-100 transition-opacity font-bold">
           <ArrowLeft size={20} /> Organizasyonlara Dön
         </button>
         <div className="flex gap-3">
+          {/* Sadece sahibe ve devredilecek başka üye varsa görünür. */}
+          {isCurrentUserOwner && transferCandidates.length > 0 && (
+            <button
+              onClick={() => setIsTransferModalOpen(true)}
+              className="bg-amber-500/10 text-amber-600 px-5 py-2.5 rounded-xl font-bold flex items-center gap-2 hover:bg-amber-500 hover:text-white transition-all"
+            >
+              <Crown size={18} /> Sahipliği Devret
+            </button>
+          )}
+
           <button onClick={handleLeaveTeam} className="bg-red-500/10 text-red-500 px-5 py-2.5 rounded-xl font-bold flex items-center gap-2 hover:bg-red-500 hover:text-white transition-all">
             <LogOut size={18} /> Ekipten Ayrıl
           </button>

@@ -72,6 +72,8 @@ import Footer from "./components/Footer";
 
 import Layout from "./components/Layout";
 
+import RequireAuth from "./components/RequireAuth";
+
 
 
 import AIPage from "./pages/AI";
@@ -185,7 +187,9 @@ const App = () => (
 
 
 
-                    {/* Panel — Sidebar VAR */}
+                    {/* Panel — Sidebar VAR. RequireAuth: token yoksa /login. */}
+
+                    <Route element={<RequireAuth />}>
 
                     <Route element={<Layout />}>
 
@@ -237,15 +241,16 @@ const App = () => (
 
                         <Route path="/settings/documents" element={<DocumentsPage />} />
 
-                       
-
-                       
-
-
-
-
+                        </Route>
 
                     </Route>
+
+                    {/* Eşleşmeyen her adres. Bu yoksa hatalı bir URL bomboş bir
+                        sayfa açıyordu (örn. sidebar'daki /help bağlantısı).
+                        RequireAuth'un DIŞINDA: giriş yapmamış birine "önce
+                        giriş yap" değil "böyle bir sayfa yok" demeliyiz. */}
+
+                    <Route path="*" element={<WithFooter><NotFound /></WithFooter>} />
 
 
 

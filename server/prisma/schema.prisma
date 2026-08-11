@@ -43,6 +43,7 @@ model User {
   memberProjects    User_Project[]
   ownedTasks        Task[]                @relation("TaskOwner")
   assignedTasks     Task[]                @relation("TaskAssignee")
+  taskComments      TaskComment[]
   notifications     Notification[]
 
   subscriptions     Subscription[]
@@ -120,6 +121,8 @@ model Task {
   storyPoints   Int        @default(0)
   sprintId      String?
   sprint        Sprint?    @relation(fields: [sprintId], references: [id], onDelete: SetNull)
+  comments      TaskComment[]
+  attachments   Document[]
   createdAt     DateTime   @default(now())
   completedAt   DateTime?
   updatedAt     DateTime   @updatedAt
@@ -144,6 +147,25 @@ model Sprint {
   tasks       Task[]
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
+}
+
+model TaskComment {
+  id        String   @id @default(uuid())
+  content   String
+  taskId    String
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  // authorId bilerek opsiyonel ve SetNull: yorum yazan kişi hesabını silerse
+  // yorum kaybolmasın, ekibin tartışma geçmişi bozulmasın. Arayüzde yazar
+  // "Silinmiş kullanıcı" olarak gösterilir. (Zorunlu + Restrict yapılsaydı
+  // kullanıcı silme işlemi bu yüzden patlardı - bkz. Project.owner.)
+  authorId  String?
+  author    User?    @relation(fields: [authorId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([taskId])
 }
 
 model Notification {
@@ -228,10 +250,20 @@ model Document {
   starred    Boolean      @default(false)
   orgId      String?
   organization Organization? @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  // Göreve eklenen dosyalar da Document olarak saklanır; ayrı bir model
+  // açmak yerine mevcut yükleme altyapısı (documentUpload.js) kullanılıyor.
+  // taskId doluysa belge bir görevin ekidir: ne ekip belgeleri sekmesinde
+  // ne de kişisel belgelerde listelenir.
+  taskId     String?
+  task       Task?        @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
   uploaderId String
   uploader   User         @relation(fields: [uploaderId], references: [id])
   createdAt  DateTime     @default(now())
   updatedAt  DateTime     @updatedAt
+
+  @@index([taskId])
 }
   model PersonalTask {
   id        String    @id @default(uuid())

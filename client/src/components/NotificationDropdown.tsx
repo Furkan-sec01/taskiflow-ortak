@@ -18,8 +18,12 @@ const NotificationDropdown = () => {
       });
       const data = await res.json();
       if (Array.isArray(data)) {
-        // Okunmamış olanları en üstte gösterebiliriz veya sadece listeyi alırız
-        setNotifications(data);
+        // Sunucu okunmuş/okunmamış ayrımı yapmadan hepsini döner. Bu açılır
+        // menü "gelen kutusu" değil bildirim rozeti: sadece OKUNMAMIŞ olanları
+        // gösterir. Eskiden hepsi gösteriliyordu, bu yüzden "tümünü okundu
+        // işaretle" dedikten 60 saniye sonra aynı bildirimler "yeni" olarak
+        // geri geliyordu. Geçmişin tamamı /notifications sayfasında duruyor.
+        setNotifications(data.filter((n: any) => !n.isRead));
       }
     } catch (error) {
       console.error("Bildirimler çekilemedi:", error);
@@ -86,7 +90,7 @@ const NotificationDropdown = () => {
       body: JSON.stringify({ notificationId, action })
     });
 
-    const data = await res.json();
+    const data = await res.json().catch(() => ({}));
 
     if (res.ok) {
       setNotifications(prev => prev.filter(n => n.id !== notificationId));
@@ -97,6 +101,10 @@ const NotificationDropdown = () => {
       } else {
         toast("İşlem tamamlandı.");
       }
+    } else {
+      // Eskiden hata durumunda hiçbir şey olmuyordu: kullanıcı "Katıl"a
+      // basıyor, bildirim duruyor, neden olmadığını anlamıyordu.
+      toast.error(data.error || "İşlem tamamlanamadı.");
     }
 
   } catch (error) {

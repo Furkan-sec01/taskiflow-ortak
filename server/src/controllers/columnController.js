@@ -1,5 +1,6 @@
 // controllers/columnController.js
 const { PrismaClient } = require("@prisma/client");
+const { collectDocumentPaths, removeFiles } = require("../utils/fileCleanup");
 const prisma = new PrismaClient();
 
 exports.createColumn = async (req, res) => {
@@ -69,9 +70,18 @@ exports.deleteColumn = async (req, res) => {
             return res.status(403).json({ error: "Sütun silme yetkiniz yok." });
         }
 
+        // Sütun silinince içindeki görevler, onlarla birlikte de görev ekleri
+        // cascade ile gidiyor. Dosyaları diskte bırakmamak için yolları önce
+        // topluyoruz.
+        const attachmentPaths = await collectDocumentPaths(prisma, {
+            task: { columnId }
+        });
+
         await prisma.column.delete({
             where: { id: columnId }
         });
+
+        removeFiles(attachmentPaths);
 
         res.status(200).json({ message: "Sütun başarıyla silindi." });
 

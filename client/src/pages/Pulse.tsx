@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Activity, TrendingUp, Users, Award, Loader2, Layout, Zap } from "lucide-react";
+import { Activity, TrendingUp, Award, Loader2, Layout, Zap } from "lucide-react";
 import { API_BASE } from "../config/api";
 
 interface Member {

@@ -7,9 +7,9 @@ import { useTheme } from "../context/ThemeContext";
 
 import {
 
-  LayoutDashboard, FolderKanban, Settings, LogOut, Bell, Search, Plus, X,
+  FolderKanban, Search, Plus, X,
 
-  Folder, Calendar, ChevronRight, AlertCircle, Activity, Layout as LayoutIcon, Building2, CheckCircle2
+  Folder, ChevronRight, AlertCircle, Activity, Layout as LayoutIcon, Building2
 
 } from "lucide-react";
 

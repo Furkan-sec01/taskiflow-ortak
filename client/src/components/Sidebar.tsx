@@ -310,7 +310,10 @@ export default function Sidebar() {
     } catch (err) {
       console.error("Logout isteği başarısız (yine de çıkış yapılıyor):", err);
     } finally {
+      // "user" da silinmeli: eskiden kalınca çıkış yapıldıktan sonra bile
+      // kenar çubuğunda önceki kullanıcının adı ve e-postası görünüyordu.
       localStorage.removeItem("token");
+      localStorage.removeItem("user");
       localStorage.removeItem("activeOrgId");
       navigate("/login");
     }
@@ -356,10 +359,54 @@ export default function Sidebar() {
     setAddingTeam(false);
   };
 
-  const handleDeleteTeam = (e: React.MouseEvent, id: string) => {
+  // Bu fonksiyon eskiden sadece yerel state'ten siliyordu: ekip listeden
+  // kayboluyor, sayfa yenilenince geri geliyordu. Artık gerçekten siliyor.
+  const handleDeleteTeam = async (e: React.MouseEvent, id: string) => {
     e.preventDefault();
     e.stopPropagation();
+
+    const team = teams.find((t) => t.id === id);
+
+    if (
+      !window.confirm(
+        `"${team?.name ?? "Bu ekip"}" silinecek. Ekibin tüm projeleri de silinir. Emin misiniz?`,
+      )
+    ) {
+      return;
+    }
+
+    const token = localStorage.getItem("token");
+
+    // İyimser güncelleme: önce listeden çıkar, istek başarısızsa geri koy.
     setTeams((prev) => prev.filter((t) => t.id !== id));
+
+    try {
+      const res = await fetch(`${API_BASE}/api/organizations/${id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Ekip silinemedi.");
+      }
+
+      // Silinen ekip aktif ekipse referansı da temizle, yoksa Üyeler sayfası
+      // artık var olmayan bir orgId ile istek atmaya devam eder.
+      if (localStorage.getItem("activeOrgId") === id) {
+        localStorage.removeItem("activeOrgId");
+      }
+
+      window.dispatchEvent(new CustomEvent("teams-updated"));
+      toast.success("Ekip silindi.");
+    } catch (error) {
+      setTeams((prev) =>
+        team && !prev.some((t) => t.id === id) ? [...prev, team] : prev,
+      );
+      toast.error(
+        error instanceof Error ? error.message : "Ekip silinirken hata oluştu.",
+      );
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
